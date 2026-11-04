@@ -1,20 +1,50 @@
-# RecServerWiki / RecServerNews
+# RecServerWiki / RecServerNews – gemeinsame öffentliche Wikipedia
 
-Browserbasierte Museums- und Wiki-App mit Artikeln, Biografien, Orten, Ereignissen, Kategorien, Bildern und internen Textlinks.
+Diese Version zeigt **allen Besuchern denselben Artikelbestand**, auch ohne Anmeldung. Inhalte ändern dürfen nur von dir freigeschaltete Redakteure. Enthalten sind Biografien, Orte, Ereignisse, Objekte, freie Artikel, Bilder, Kategorien, Zeitstrahlen und Wikipedia-Links.
 
-## Dateien
-- `index.html`: vollständig eigenständige Web-App.
-- `supabase/setup.sql`: SQL-Einrichtung für private, benutzerbezogene Cloud-Archive.
+## 1. Datenbank einmalig umstellen
 
-## Online stellen
-1. In GitHub unter **Settings → Pages** als Quelle **Deploy from a branch** wählen, Branch **main** und Ordner **/(root)**.
-2. Wenn du GitHub Free nutzt, muss das Repository für GitHub Pages normalerweise **öffentlich** sein. Stelle es nur öffentlich, wenn der Code sichtbar sein darf.
-3. Die Webadresse wird nach erfolgreichem Deployment voraussichtlich https://tschikunow.github.io/RecServerWiki/ sein.
+1. Öffne [Supabase](https://supabase.com/dashboard) und wähle das Projekt **RecServerWiki**.
+2. Gehe zu **SQL Editor → New query**.
+3. Kopiere den gesamten Inhalt von [`supabase/wiki-shared.sql`](supabase/wiki-shared.sql) und klicke auf **Run**.
+4. Diese Migration löscht **nicht** die alte private Datenbank `recservernews_sync` oder deren Dateien.
 
-## Cloud zwischen Geräten
-1. In Supabase ein Projekt anlegen.
-2. `supabase/setup.sql` im Supabase SQL Editor ausführen.
-3. In der App unter **Cloud & Synchronisierung** die Supabase Project URL und den **öffentlichen** Publishable/Anon Key eintragen.
-4. Mit demselben Konto auf PC und Handy anmelden. Vor dem ersten Upload unbedingt eine JSON-Datensicherung erstellen.
+## 2. Öffentliche Verbindung für alle Besucher aktivieren
 
-**Wichtig:** GitHub Pages hostet nur die App, nicht die Artikel-Datenbank. Die Cloud ist erst nach Supabase-Einrichtung verfügbar. Die bisherigen Artikelarchive sind benutzerbezogen privat und noch keine allgemein öffentliche Wikipedia.
+1. In Supabase unter **Project Settings → API Keys** den **Publishable Key** (`sb_publishable_…`) kopieren. Alternativ den öffentlichen `anon`-Key nutzen.
+2. Auf GitHub die Datei [`cloud-config.js`](cloud-config.js) bearbeiten (Bleistift ✏), den Text `HIER_EINFUEGEN` **nur** durch den öffentlichen Schlüssel ersetzen und **Commit changes** klicken.
+3. Die Projekt-URL steht bereits darin. Prüfe bei Bedarf unter **Project Settings → Data API** ob sie zu deinem Projekt passt.
+4. GitHub Pages veröffentlicht die aktualisierte Datei. Danach können **alle Besucher** die geteilten Artikel laden, ohne irgendeinen Schlüssel eingeben zu müssen.
+
+**WICHTIG:** Nur den `sb_publishable_...` oder öffentlichen `anon`-Key auf GitHub eintragen. **Niemals** `sb_secret_...`, `service_role`, Passwort oder Datenbank-Passwort veröffentlichen. Der öffentliche Key schützt nicht die Inhalte: dafür sind die RLS-Regeln in `wiki-shared.sql` zuständig.
+
+## 3. Dein Redaktionskonto freischalten
+
+1. Öffne https://tschikunow.github.io/RecServerWiki/ und wähle **Cloud & Synchronisierung**.
+2. Erstelle ein Konto mit deiner E-Mail oder melde dich an. Falls Supabase E-Mail-Bestätigung verlangt, bestätige sie zuerst.
+3. Im Supabase **SQL Editor** einen **neuen** Query erstellen und folgenden Code ausführen. Ersetze `DEINE_LOGIN_EMAIL` durch genau die E-Mail-Adresse deines eben angelegten Supabase-Kontos:
+
+```sql
+insert into public.recserverwiki_editors (user_id, role)
+select id, 'admin' from auth.users where email = 'DEINE_LOGIN_EMAIL'
+on conflict (user_id) do update set role = 'admin';
+```
+
+4. Öffne den Cloud-Bereich in der Wiki-Seite und klicke auf **Redaktionsrechte erneut prüfen**. Die Rolle sollte jetzt `admin` sein.
+5. Erstelle deinen ersten Artikel und speichere ihn. Er wird automatisch für alle veröffentlicht.
+
+**Weitere Redakteure:** Dasselbe `insert ... select` mit der E-Mail ihres Supabase-Kontos ausführen und Rolle `editor` statt `admin` verwenden. Unbekannte Besucher und nicht freigeschaltete Nutzer bleiben Leser.
+
+## 4. Vorhandene Artikel übernehmen
+
+- Im Cloud-Bereich als Admin auf **Alte lokale Artikel übernehmen** klicken, wenn du auf demselben PC früher mit der alten Version geschrieben hast.
+- Alternativ unter **Archiv & Daten** eine vorher gespeicherte JSON-Sicherung importieren.
+- Die bisher private und die neue öffentliche Sammlung bleiben getrennt, bis du bewusst **Diese lokale Version veröffentlichen** auswählst. **Vorher beide Datenbestände als JSON sichern**, weil Veröffentlichen die aktuelle öffentliche Version ersetzt.
+
+## Hinweise
+
+- GitHub Pages hostet nur die App. Supabase ist die gemeinsame Cloud-Datenbank und der Speicher für Bilder.
+- Alle veröffentlichten Texte und Bilder sind **öffentlich im Internet**. Lade keine privaten Daten, fremde geschützte Bilder oder geheime Dokumente hoch.
+- Bei Änderungen durch mehrere Redakteure verhindert die Versionsprüfung einen stillen Austausch; trotzdem muss bei Konflikten eine Version ausgewählt werden.
+- Bei offenem Browser werden Änderungen etwa alle 20 Sekunden abgefragt. Ein Neuladen zeigt sofort den aktuellen Stand.
+- Ein echter Supabase-Livetest steht noch aus. Die lokale JavaScript-Syntax und die Repository-Dateien sind geprüft; die SQL-Einrichtung und der öffentliche Key müssen erst durchgeführt werden.
