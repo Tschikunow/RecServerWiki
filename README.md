@@ -35,6 +35,17 @@ on conflict (user_id) do update set role = 'admin';
 
 **Weitere Redakteure:** Dasselbe `insert ... select` mit der E-Mail ihres Supabase-Kontos ausführen und Rolle `editor` statt `admin` verwenden. Unbekannte Besucher und nicht freigeschaltete Nutzer bleiben Leser.
 
+## E-Mail-Verifizierung und Weiterleitungen
+
+Unter **Supabase → Authentication → URL Configuration**:
+
+- **Site URL:** `https://tschikunow.github.io/RecServerWiki/`
+- **Redirect URLs:** `https://tschikunow.github.io/RecServerWiki/**`
+
+Die Registrierung sendet nun die Wiki-Adresse als `redirect_to`. Diese URL muss in Supabase zugelassen sein. Nach erfolgreicher Bestätigung kann man sich auch direkt mit E-Mail/Passwort anmelden. Wenn ein älterer Bestätigungslink zu `localhost:3000` führte, kann die E-Mail trotzdem bereits bestätigt sein, weil die Weiterleitung erst **nach** der Bestätigung fehlschlägt.
+
+Im Wiki unter **Cloud & Synchronisierung → Verbindung testen** zuerst prüfen, ob die gemeinsame Datenbank erreichbar ist. Bei `Failed to fetch` die Projektadresse und die erfolgreich veröffentlichte GitHub-Pages-Version prüfen.
+
 ## 4. Vorhandene Artikel übernehmen
 
 - Im Cloud-Bereich als Admin auf **Alte lokale Artikel übernehmen** klicken, wenn du auf demselben PC früher mit der alten Version geschrieben hast.
