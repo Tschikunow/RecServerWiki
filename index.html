@@ -280,6 +280,7 @@ $('#mobileBackdrop').addEventListener('click',()=>{$('#sidebar').classList.remov
    Old per-account recservernews_sync and private snapshots are not modified. */
 const CLOUD_CFG_KEY='recserverwiki_public_config_v1';
 const CLOUD_AUTH_KEY='recserverwiki_public_session_v1';
+const CLOUD_SITE_URL='https://tschikunow.github.io/RecServerWiki/';
 const CLOUD_BUCKET='recserverwiki-public';
 const CLOUD_TABLE='recserverwiki_shared';
 const CLOUD_KEY='main';
@@ -304,7 +305,15 @@ function cloudStatus(msg,status){
 }
 function cloudAfterLocalSave(){if(!cloudCanEdit()||cloud.applying)return;cloud.dirty=true;if(!cloud.blocked){cloudStatus('Änderung lokal gespeichert. Gemeinsames Wiki wird aktualisiert …','dirty');cloudSchedule()}}
 function cloudSchedule(){clearTimeout(cloud.timer);if(!cloudCanEdit()||cloud.blocked)return;cloud.timer=setTimeout(()=>cloudUpload('auto').catch(cloudOnError),1400)}
-function cloudOnError(error){console.warn('RecServerWiki Cloud',error);cloud.failure=true;cloudStatus('Cloud-Problem: '+String(error?.message||error).slice(0,180),'error')}
+function cloudOnError(error){
+ console.warn('RecServerWiki Cloud',error);
+ cloud.failure=true;
+ const msg=String(error?.message||error);
+ const clear=msg==='Failed to fetch'
+  ? 'Cloud-Verbindung nicht erreichbar. Prüfe die Projekt-URL ('+(cloud.config?.url||'nicht verbunden')+'), die Internetverbindung und ob GitHub Pages aktuell ist.'
+  : 'Cloud-Problem: '+msg.slice(0,210);
+ cloudStatus(clear,'error');
+}
 function cloudValidateConfig(url,key){
  url=String(url||'').trim().replace(/\/+$/,'');key=String(key||'').trim();
  if(!/^https:\/\/[a-z\d.-]+(?::\d+)?$/i.test(url))throw Error('Gültige HTTPS-Supabase-Projektadresse erforderlich.');
@@ -448,11 +457,45 @@ async function cloudImportLegacy(){
   cloud.blocked=true;state=migrateData(old);await saveState();render();cloudStatus('Alte Artikel lokal übernommen. Über „Diese lokale Version veröffentlichen“ kannst du sie ins gemeinsame Wiki übertragen.','conflict');cloudRenderModal();
  }catch(e){cloudOnError(e)}
 }
+async function cloudTestConnection(){
+ if(!cloud.config){toast('Bitte zuerst Supabase verbinden.');return}
+ cloudStatus('Prüfe die gemeinsame Supabase-Datenbank …','busy');
+ try{
+  const meta=await cloudGetMeta();
+  if(!meta)throw Error('Tabelle recserverwiki_shared fehlt. Supabase SQL Editor: supabase/wiki-shared.sql ausführen.');
+  cloudApplyMeta(meta);cloud.failure=false;
+  cloudStatus('Supabase erreichbar. Gemeinsames Wiki gefunden (Version '+meta.revision+').','ready');
+ }catch(e){cloudOnError(e)}
+ finally{cloudRenderModal()}
+}
+async function cloudResendConfirmation(){
+ const email=document.getElementById('cloudEmail')?.value.trim();
+ if(!email){toast('E-Mail für die Bestätigung eingeben.');return}
+ cloudStatus('Fordere Bestätigungsmail an …','busy');
+ try{
+  await cloudAuthRequest('resend?redirect_to='+encodeURIComponent(CLOUD_SITE_URL),{email,type:'signup'});
+  cloudStatus('Bestätigung angefragt. Prüfe Posteingang und Spam. Bei Weiterleitung zu localhost: Supabase → Authentication → URL Configuration einstellen.','auth');
+ }catch(e){cloudOnError(e)}finally{cloudRenderModal()}
+}
+function cloudReadConfirmation(){
+ const h=new URLSearchParams(location.hash.startsWith('#')?location.hash.slice(1):location.hash);
+ if(!h.get('access_token')||!h.get('refresh_token'))return false;
+ try{
+  const token=h.get('access_token'),parts=token.split('.');
+  if(parts.length!==3)throw Error('Ungültiges Bestätigungstoken.');
+  const jwt=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+  if(!jwt.sub)throw Error('Konto-ID fehlt.');
+  cloudRememberSession({access_token:token,refresh_token:h.get('refresh_token'),expires_in:Number(h.get('expires_in')||3600),user:{id:jwt.sub,email:jwt.email||''}});
+  history.replaceState(null,'',location.pathname+location.search);
+  return true;
+ }catch(e){console.warn('E-Mail-Bestätigung konnte nicht übernommen werden',e);return false}
+}
 async function cloudSignIn(signup=false){
  const email=document.getElementById('cloudEmail')?.value.trim(),password=document.getElementById('cloudPassword')?.value||'';
  if(!email||!password){toast('E-Mail und Passwort eingeben.');return}
  cloudStatus('Anmeldung läuft …','busy');
- try{const s=await cloudAuthRequest(signup?'signup':'token?grant_type=password',{email,password});
+ try{const redirect='signup?redirect_to='+encodeURIComponent(CLOUD_SITE_URL);
+  const s=await cloudAuthRequest(signup?redirect:'token?grant_type=password',{email,password});
   if(!s.access_token){cloudStatus('Registrierung angenommen. Falls die Bestätigung aktiv ist, prüfe Posteingang und Spam. Ohne E-Mail: Supabase → Authentication → Users prüfen.','auth');toast('Registrierung geprüft. Möglicherweise E-Mail-Bestätigung nötig.');return}
   cloudRememberSession(s);cloud.revision=null;cloud.blocked=false;cloud.dirty=false;
   await cloudCheckRole();await cloudReconcile();
@@ -488,9 +531,9 @@ function cloudRenderModal(){
  ${!configured?`<div class="cloud-stage"><h3>Supabase mit dieser Website verbinden</h3><p>Projekt-URL und ÖFFENTLICHEN Publishable Key eintragen. Damit jeder Besucher das Wiki sofort sieht, einmalig dieselben Angaben in der GitHub-Datei <code>cloud-config.js</code> speichern.</p><label>Supabase-Projekt-URL<input id="cloudUrl" type="url" placeholder="https://projekt.supabase.co"></label><label>Öffentlicher Publishable/Anon Key<input id="cloudKey" type="text" placeholder="sb_publishable_..." spellcheck="false"></label><button type="button" class="cloud-primary" data-cloud-action="save-config">Projekt lokal verbinden</button><p class="cloud-hint">Nur Publishable/Anon! Niemals Secret oder Service-Role-Key.</p></div>`:''}
  ${configured?`<div class="cloud-stage"><h3>${editor?'Redaktion freigeschaltet':'Öffentliches Wiki'}</h3><p>${editor?'Du darfst Artikel veröffentlichen und bearbeiten. Änderungen erscheinen für alle Besucher.':account?'Dein Konto kann Artikel lesen. Der Betreiber muss es erst als Redakteur freischalten.':'Lesen geht ohne Konto. Für die Redaktion kannst du dich hier anmelden.'}</p><div class="cloud-stats"><span><small>Version</small><b>${cloud.revision??'—'}</b></span><span><small>Artikel</small><b>${state.exhibits.length}</b></span><span><small>Kategorien</small><b>${state.categories.length}</b></span></div>
  ${editor&&locked?`<p><strong>Versionskonflikt:</strong> Vor einer Entscheidung bitte eine JSON-Sicherung erstellen.</p><div class="cloud-actions cloud-conflict-actions"><button type="button" class="cloud-primary" data-cloud-action="choose-remote">Öffentliche Version übernehmen</button><button type="button" class="cloud-secondary" data-cloud-action="choose-local">Diese lokale Version veröffentlichen</button></div>`:''}
- <div class="cloud-actions"><button type="button" class="cloud-secondary" data-cloud-action="check-now">Öffentliches Archiv aktualisieren</button>${editor&&!locked?'<button type="button" class="cloud-primary" data-cloud-action="sync-now">Jetzt veröffentlichen</button>':''}${account&&!editor?'<button type="button" class="cloud-secondary" data-cloud-action="check-role">Redaktionsrechte erneut prüfen</button>':''}</div>
+ <div class="cloud-actions"><button type="button" class="cloud-secondary" data-cloud-action="test-connection">Verbindung testen</button><button type="button" class="cloud-secondary" data-cloud-action="check-now">Öffentliches Archiv aktualisieren</button>${editor&&!locked?'<button type="button" class="cloud-primary" data-cloud-action="sync-now">Jetzt veröffentlichen</button>':''}${account&&!editor?'<button type="button" class="cloud-secondary" data-cloud-action="check-role">Redaktionsrechte erneut prüfen</button>':''}</div>
  <div class="cloud-bottom-actions"><button type="button" class="cloud-text-btn" data-cloud-action="export">↓ JSON-Sicherung herunterladen</button>${editor?'<button type="button" class="cloud-text-btn" data-cloud-action="import-legacy">↥ Alte lokale Artikel übernehmen</button>':''}${account?'<button type="button" class="cloud-text-btn" data-cloud-action="logout">Abmelden</button>':''}</div></div>`:''}
- ${configured&&!account?`<div class="cloud-stage"><h3>Redaktionskonto</h3><p>Alle dürfen lesen. Nur zugelassene Konten dürfen schreiben.</p><label>E-Mail<input id="cloudEmail" type="email" autocomplete="username"></label><label>Passwort<input id="cloudPassword" type="password" minlength="6" autocomplete="current-password"></label><div class="cloud-actions"><button type="button" class="cloud-primary" data-cloud-action="login">Anmelden</button><button type="button" class="cloud-secondary" data-cloud-action="signup">Konto erstellen</button></div></div>`:''}
+ ${configured&&!account?`<div class="cloud-stage"><h3>Redaktionskonto</h3><p>Alle dürfen lesen. Nur zugelassene Konten dürfen schreiben.</p><label>E-Mail<input id="cloudEmail" type="email" autocomplete="username"></label><label>Passwort<input id="cloudPassword" type="password" minlength="6" autocomplete="current-password"></label><div class="cloud-actions"><button type="button" class="cloud-primary" data-cloud-action="login">Anmelden</button><button type="button" class="cloud-secondary" data-cloud-action="signup">Konto erstellen</button></div><button type="button" class="cloud-text-btn" data-cloud-action="resend-confirmation">Bestätigungsmail erneut anfordern</button><p class="cloud-hint">Bestätigungslinks sollen zu ${CLOUD_SITE_URL} führen. Falls sie auf localhost:3000 landen, unter Supabase → Authentication → URL Configuration die Site URL und erlaubten Redirect-URLs korrigieren. Nach bereits erfolgter Bestätigung kannst du dich direkt anmelden.</p></div>`:''}
  ${configured?`<details class="cloud-more"><summary>Supabase-Projekt wechseln</summary><div class="cloud-stage"><label>Projekt-URL<input id="cloudUrl" value="${esc(cloud.config.url)}"></label><label>Publishable Key<input id="cloudKey" value="${esc(cloud.config.key)}"></label><button class="cloud-secondary" data-cloud-action="save-config">Neue Verbindung speichern</button></div></details>`:''}
  <div class="cloud-instructions"><b>Öffentliches Wiki:</b><ol><li>Jeder Besucher sieht dieselben Artikel auch ohne Anmeldung.</li><li>Artikel ändern können nur per SQL freigeschaltete Redakteure.</li><li>Wenn noch kein öffentlicher Artikel existiert, kann ein Redakteur seine JSON-Sicherung importieren und veröffentlichen.</li></ol><small>Die öffentliche Sammlung ist für alle Internetnutzer sichtbar. Private lokale Altbestände werden nicht automatisch veröffentlicht.</small></div></div></div></div>`;
  host.innerHTML=content;
@@ -508,6 +551,7 @@ async function cloudInitialize(){
  const preset=window.RECSERVERWIKI_CONFIG||{},stored=cloudGet(CLOUD_CFG_KEY);
  try{cloud.config=preset.url&&preset.key&&!String(preset.key).includes('HIER_EINFUEGEN')?cloudValidateConfig(preset.url,preset.key):(stored?cloudValidateConfig(stored.url,stored.key):null)}catch(e){console.warn('Ungültige Konfiguration',e);cloud.config=null}
  cloud.session=cloudGet(CLOUD_AUTH_KEY);cloud.role='reader';
+ cloudReadConfirmation();
  if(!cloud.config){cloudStatus('Projekt ist noch nicht mit dem öffentlichen Supabase-Key verbunden.','local');return}
  if(cloud.session){try{await cloudToken();await cloudCheckRole()}catch(e){cloud.session=null;cloud.role='reader';cloudPut(CLOUD_AUTH_KEY,null)}}
  await cloudReconcile();
@@ -533,7 +577,7 @@ document.addEventListener('click',async e=>{
  const act=e.target.closest('[data-cloud-action]');if(!act)return;
  e.preventDefault();e.stopImmediatePropagation();const a=act.dataset.cloudAction;
  try{
-  if(a==='open')return cloudOpen();if(a==='close')return cloudClose();if(a==='save-config')return await cloudSaveConfig();if(a==='login')return await cloudSignIn(false);if(a==='signup')return await cloudSignIn(true);if(a==='logout')return await cloudSignOut();if(a==='export')return downloadArchive();
+  if(a==='open')return cloudOpen();if(a==='close')return cloudClose();if(a==='save-config')return await cloudSaveConfig();if(a==='test-connection')return await cloudTestConnection();if(a==='resend-confirmation')return await cloudResendConfirmation();if(a==='login')return await cloudSignIn(false);if(a==='signup')return await cloudSignIn(true);if(a==='logout')return await cloudSignOut();if(a==='export')return downloadArchive();
   if(cloudSetBusyGuard())return;
   if(a==='check-role'){await cloudCheckRole();return cloudRenderModal()}if(a==='import-legacy')return await cloudImportLegacy()
   if(a==='choose-local')return await cloudChooseLocal();if(a==='choose-remote')return await cloudChooseRemote();
