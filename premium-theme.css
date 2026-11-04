@@ -160,3 +160,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:700px){.scope-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.scope-head{flex-wrap:wrap}.scope-total{display:none}.hero{padding:29px!important;min-height:315px!important}.hero h1{font-size:38px!important}.metric{padding:16px!important}.theme-toggle{height:39px}.top-actions{gap:5px!important}.search-wrap{min-width:0!important}}
 @media(max-width:435px){.topbar .theme-toggle{width:34px;min-width:34px;height:36px;padding:0}.topbar .search-wrap{max-width:136px!important;height:36px!important}.topbar .btn{width:36px!important}.topbar .cloud-indicator{min-height:36px!important}.hero{padding:26px!important}.scope-tab{min-height:83px;padding:11px!important}.scope-tabs{gap:7px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+
+/* UNIVERSAL BIOGRAPHY CHOICE LIBRARIES / birthplace, occupation, significance */
+.bio-preset-field{
+ display:flex;flex-direction:column;gap:8px;min-width:0;padding:17px;
+ border:1px solid var(--rsw-border);border-radius:14px;background:var(--rsw-raised)
+}
+.bio-preset-field>span{font-weight:740;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--rsw-accent)!important}
+.bio-preset-field select,.bio-preset-field input{
+ width:100%;height:42px;padding:10px 13px;background:var(--rsw-card)!important;
+ color:var(--rsw-ink)!important;border:1px solid var(--rsw-border)!important;
+ border-radius:10px!important;font-size:12px
+}
+.bio-preset-field select:focus,.bio-preset-field input:focus{border-color:var(--rsw-accent)!important;outline:3px solid var(--rsw-ring)}
+.bio-preset-field select{cursor:pointer;appearance:auto}
+.bio-preset-field option{background:var(--rsw-card);color:var(--rsw-ink)}
+.bio-preset-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:2px}
+.bio-preset-actions .btn{font-size:11px;padding:8px 12px;min-height:34px;white-space:normal}
+.bio-preset-actions small{color:var(--rsw-muted);font-size:10px}
+.bio-preset-library{border-top:1px solid var(--rsw-border);margin-top:7px;padding-top:11px}
+.bio-preset-library summary{color:var(--rsw-accent);font-size:11px;font-weight:700;cursor:pointer;padding:4px}
+.bio-preset-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.bio-preset-chip{
+ border:1px solid var(--rsw-border);background:var(--rsw-soft);color:var(--rsw-ink);
+ border-radius:999px;display:inline-flex;align-items:center;gap:10px;
+ padding:7px 10px;font-size:11px;cursor:pointer;max-width:100%;
+ transition:border-color .2s,background .2s,transform .2s
+}
+.bio-preset-chip:hover{background:var(--rsw-raised);border-color:var(--rsw-accent);transform:translateY(-1px)}
+.bio-preset-chip b{font-size:16px;line-height:1;color:var(--rsw-muted)}
+.bio-preset-chip:hover b{color:#ed6275}
+@media(max-width:620px){.bio-preset-field{padding:13px}.bio-preset-actions{align-items:flex-start;flex-direction:column}}
