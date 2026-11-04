@@ -194,7 +194,7 @@ function isServerLocation(e){
  if(!e||e.type!=='place')return false;
  return (e.categories||[]).some(key=>{
   const c=getCategory(key);
-  return c&&/^(server|servers|server allgemein|server insgesamt)$/i.test(String(c.name||'').trim());
+  return c&&/\bservers?\b/i.test(String(c.name||'').trim());
  });
 }
 function serverPhotos(e){
