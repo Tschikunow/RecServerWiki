@@ -46,3 +46,13 @@ Vor zukünftigen Änderungen: Aktuellen GitHub-Code, GitHub Actions und Supabase
 - `migrateData()` übernimmt alte Archive ohne `biographyPresets` ohne Datenverlust. JSON-Exporte enthalten die Listen. Auch beim Leeren von Einträgen bleiben die Listen erhalten.
 - Altes `details.occupation` wird beibehalten, ehemals „Tätigkeit / Bedeutung“. Bedeutung hat nun separat `details.significance`.
 - `premium-theme.css` gestaltet Dropdowns, Merken-Buttons und die Verwaltungschips in Dark/Light Mode.
+
+## Rec Room-Serverprofile unter Orte (05.11.2026)
+- **Server bleibt der Eintragstyp `place`**, erkannt durch eine bestehende Ortskategorie namens `Server`, `Servers`, `Server allgemein` oder `Server insgesamt` (Groß-/Kleinschreibung egal).
+- Wenn diese Kategorie im Editor ausgewählt wird, ersetzt ein spezielles Serverprofil die allgemeinen Ortsfelder (Land, Region, Koordinaten). Andere Orte bleiben unverändert.
+- Der Ortstitel ist der **Servername**. Titelbild und optionale Kurzbeschreibung bleiben die bestehenden Standardfelder.
+- Servereigene Profildaten in `details`: `serverOwner`, `serverCoOwner`, `serverCurrency`, `serverDescription`, `serverAllies`. Verbündete Server/Räume werden als durch Zeilenumbruch oder Komma getrennte Namen gespeichert und mit bestehenden, exakt gleich benannten Serverartikeln verlinkt, sofern vorhanden.
+- Ein eigenes kleines Bilderalbum liegt pro Serverartikel als `serverPhotos: [{src,caption}]` direkt am Eintrag, maximal 8 Bilder. Bilder laufen durch die vorhandene clientseitige Bildkompression und den bestehenden Supabase-JSON-Snapshot.
+- `migrateData()` bewahrt `serverPhotos` bei Cloud-Synchronisierung, Import und Export; alte Orte ohne das Feld funktionieren unverändert.
+- UI: `serverProfile()`, `serverDetailsEditor()`, CSS in `premium-theme.css`. Keine Supabase-Schemaänderung.
+- Beim Speichern werden Änderungen zuerst lokal abgelegt. Bei Versionskonflikt muss der Admin seine richtige lokale Version bewusst im Cloud-Dialog veröffentlichen, damit sie auf Handy/Inkognito sichtbar ist.
