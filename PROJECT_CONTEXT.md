@@ -30,3 +30,10 @@ Jeder Besucher lädt automatisch dieselben veröffentlichten Artikel. Neue Verö
 - GitHub Pages benötigt **keine eigene gekaufte Domain**.
 
 Vor zukünftigen Änderungen: Aktuellen GitHub-Code, GitHub Actions und Supabase-Zustand erneut prüfen.
+## Design- und Kategorie-Update (04.11.2026)
+- Das Premium-Design liegt in `premium-theme.css` und wird von `index.html` geladen. Bestehende Cloud-, Rollen- und Veröffentlichungslogik nicht neu aufbauen.
+- Dunkles und helles Theme über Button im Header; gewähltes Theme wird in `localStorage` unter `rsw_premium_theme_v1` gespeichert. Standard: Dark Mode.
+- Neue animierte Darstellung für Startseite, Sidebar, Karten, Artikel, Editor und Modalfenster; unterstützt `prefers-reduced-motion`.
+- Kategorien haben nun zusätzlich `scope`: `all` (allgemein), `person` (Biografie), `place` (Ort), `event` (Ereignis), `object` (Objekt), `article` (Artikel).
+- Historische Kategorien ohne Scope bleiben **allgemein**. `migrateData()` bewahrt Scope, damit Cloud-Snapshots und JSON-Sicherungen abwärtskompatibel bleiben.
+- Kategorieverwaltung zeigt getrennte Tabs, der Editor nur allgemeine und für den Artikeltyp passende Kategorien. Der Datenbankaufbau selbst wurde nicht geändert.
