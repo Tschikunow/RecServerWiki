@@ -304,7 +304,7 @@ function cloudStatus(msg,status){
 }
 function cloudAfterLocalSave(){if(!cloudCanEdit()||cloud.applying)return;cloud.dirty=true;if(!cloud.blocked){cloudStatus('Änderung lokal gespeichert. Gemeinsames Wiki wird aktualisiert …','dirty');cloudSchedule()}}
 function cloudSchedule(){clearTimeout(cloud.timer);if(!cloudCanEdit()||cloud.blocked)return;cloud.timer=setTimeout(()=>cloudUpload('auto').catch(cloudOnError),1400)}
-function cloudOnError(error){console.warn('RecServerWiki Cloud',error);cloud.failure=true;cloudStatus('Cloud-Problem: '+String(error?.message||error).slice(0,180),'error');if(document.getElementById('cloudModal'))cloudRenderModal()}
+function cloudOnError(error){console.warn('RecServerWiki Cloud',error);cloud.failure=true;cloudStatus('Cloud-Problem: '+String(error?.message||error).slice(0,180),'error')}
 function cloudValidateConfig(url,key){
  url=String(url||'').trim().replace(/\/+$/,'');key=String(key||'').trim();
  if(!/^https:\/\/[a-z\d.-]+(?::\d+)?$/i.test(url))throw Error('Gültige HTTPS-Supabase-Projektadresse erforderlich.');
@@ -453,7 +453,7 @@ async function cloudSignIn(signup=false){
  if(!email||!password){toast('E-Mail und Passwort eingeben.');return}
  cloudStatus('Anmeldung läuft …','busy');
  try{const s=await cloudAuthRequest(signup?'signup':'token?grant_type=password',{email,password});
-  if(!s.access_token){cloudStatus('Registriert. Bitte E-Mail bestätigen und danach anmelden.','auth');toast('Bestätigungs-E-Mail öffnen.');return}
+  if(!s.access_token){cloudStatus('Registrierung angenommen. Falls die Bestätigung aktiv ist, prüfe Posteingang und Spam. Ohne E-Mail: Supabase → Authentication → Users prüfen.','auth');toast('Registrierung geprüft. Möglicherweise E-Mail-Bestätigung nötig.');return}
   cloudRememberSession(s);cloud.revision=null;cloud.blocked=false;cloud.dirty=false;
   await cloudCheckRole();await cloudReconcile();
  }catch(e){cloudOnError(e)}finally{cloudRenderModal()}
@@ -477,6 +477,11 @@ async function cloudSaveConfig(){
 function cloudSetBusyGuard(){if(cloud.busy){toast('Cloud-Vorgang läuft bereits.');return true}return false}
 function cloudRenderModal(){
  const host=document.getElementById('cloudHost');if(!host||!document.getElementById('cloudModal'))return;
+ // Preserve entered values, focus, and scroll during a status refresh. Never store passwords on disk.
+ const oldWindow=host.querySelector('.cloud-window'),oldScroll=oldWindow?.scrollTop||0;
+ const active=document.activeElement,activeId=host.contains(active)?active?.id:null;
+ const selection=(activeId&&typeof active?.selectionStart==='number')?[active.selectionStart,active.selectionEnd]:null;
+ const oldFields=Object.fromEntries(['cloudEmail','cloudPassword','cloudUrl','cloudKey'].map(id=>[id,host.querySelector('#'+id)?.value??null]));
  const account=cloud.session,configured=!!cloud.config,editor=cloudCanEdit(),locked=cloud.blocked;
  const content=`<div class="cloud-overlay" id="cloudModal"><div class="cloud-window" role="dialog" aria-modal="true" aria-label="Öffentliches Wiki und Redaktion"><div class="cloud-titlebar"><div><div class="cloud-eyebrow">RECSERVERWIKI / GEMEINSAMES ARCHIV</div><h2>Eine Wikipedia. Für alle.</h2><p>Alle Besucher sehen dieselben Artikel. Nur freigeschaltete Redakteure können Inhalte ändern.</p></div><button type="button" class="cloud-close" data-cloud-action="close" title="Schließen">×</button></div>
  <div class="cloud-pane"><div class="cloud-state"><span class="cloud-state-orb ${esc(cloud.status)}"></span><div><b id="cloudStatusText">${esc(cloud.lastMessage)}</b><small>${account?'Angemeldet: '+esc(account.user.email||'Konto')+' · Rolle: '+esc(cloud.role):'Gast · öffentliches Wiki nur lesen'}</small></div></div>
@@ -489,6 +494,13 @@ function cloudRenderModal(){
  ${configured?`<details class="cloud-more"><summary>Supabase-Projekt wechseln</summary><div class="cloud-stage"><label>Projekt-URL<input id="cloudUrl" value="${esc(cloud.config.url)}"></label><label>Publishable Key<input id="cloudKey" value="${esc(cloud.config.key)}"></label><button class="cloud-secondary" data-cloud-action="save-config">Neue Verbindung speichern</button></div></details>`:''}
  <div class="cloud-instructions"><b>Öffentliches Wiki:</b><ol><li>Jeder Besucher sieht dieselben Artikel auch ohne Anmeldung.</li><li>Artikel ändern können nur per SQL freigeschaltete Redakteure.</li><li>Wenn noch kein öffentlicher Artikel existiert, kann ein Redakteur seine JSON-Sicherung importieren und veröffentlichen.</li></ol><small>Die öffentliche Sammlung ist für alle Internetnutzer sichtbar. Private lokale Altbestände werden nicht automatisch veröffentlicht.</small></div></div></div></div>`;
  host.innerHTML=content;
+ for(const [id,value] of Object.entries(oldFields)){
+  if(value===null)continue;
+  const field=host.querySelector('#'+id);if(field)field.value=value;
+ }
+ const nextWindow=host.querySelector('.cloud-window');if(nextWindow)nextWindow.scrollTop=oldScroll;
+ const nextFocus=activeId?host.querySelector('#'+activeId):null;
+ if(nextFocus){nextFocus.focus({preventScroll:true});if(selection)try{nextFocus.setSelectionRange(selection[0],selection[1])}catch(e){}}
 }
 function cloudOpen(){document.getElementById('cloudHost').innerHTML='<div class="cloud-overlay" id="cloudModal"></div>';cloudRenderModal()}
 function cloudClose(){document.getElementById('cloudHost').innerHTML=''}
