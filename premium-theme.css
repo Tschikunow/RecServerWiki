@@ -192,3 +192,36 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .bio-preset-chip b{font-size:16px;line-height:1;color:var(--rsw-muted)}
 .bio-preset-chip:hover b{color:#ed6275}
 @media(max-width:620px){.bio-preset-field{padding:13px}.bio-preset-actions{align-items:flex-start;flex-direction:column}}
+
+
+/* REC ROOM SERVER PROFILES — specialised ORTE visual identity */
+.server-profile{margin:29px 0 34px;padding:25px;border:1px solid var(--rsw-border);border-radius:17px;background:var(--rsw-raised);box-shadow:0 8px 35px #00000009}
+.server-profile-heading{padding-bottom:14px;border-bottom:1px solid var(--rsw-border);margin-bottom:19px}
+.server-profile-heading h2{font:600 27px/1.2 Georgia,serif;letter-spacing:-.6px;margin:6px 0 2px;color:var(--rsw-ink)}
+.server-profile h3{font-size:13px;letter-spacing:.2px;color:var(--rsw-ink);font-weight:740;margin:0 0 11px}
+.server-profile-description,.server-profile-allies,.server-photo-gallery{margin:0 0 23px}
+.server-profile-description p{color:var(--rsw-muted);line-height:1.85;font-size:13px;margin:0 0 10px;overflow-wrap:anywhere}
+.server-ally-list{display:flex;gap:8px;flex-wrap:wrap}
+.server-ally{display:inline-flex;align-items:center;max-width:100%;padding:7px 11px;border:1px solid var(--rsw-border);background:var(--rsw-card);border-radius:9px;color:var(--rsw-ink);font-weight:650;font-size:11px;overflow-wrap:anywhere}
+.server-ally:before{content:'◇';color:var(--rsw-accent);margin-right:8px;font-size:14px}
+.server-photo-gallery{margin-bottom:0}
+.server-photo-gallery h3{display:flex;align-items:center;gap:9px}
+.server-photo-gallery h3 small{font-size:10px;font-weight:500;color:var(--rsw-muted)}
+.server-photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:13px}
+.server-photo-grid figure{margin:0;border-radius:11px;overflow:hidden;border:1px solid var(--rsw-border);background:var(--rsw-card);min-width:0}
+.server-photo-grid img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;transition:transform .3s ease}
+.server-photo-grid figure:hover img{transform:scale(1.05)}
+.server-photo-grid figcaption{font-size:10px;color:var(--rsw-muted);padding:0 10px;line-height:1.45;overflow-wrap:anywhere}
+.server-photo-grid figcaption:not(:empty){padding:9px 10px}
+.server-editor-section{border-top:3px solid var(--rsw-accent)!important}
+.server-editor-section .editor-section-head{margin-bottom:16px}
+.server-editor-section .field{margin-bottom:14px}
+.server-editor-section textarea{min-height:82px!important;background:var(--rsw-raised)!important;color:var(--rsw-ink)!important;border-color:var(--rsw-border)!important;line-height:1.7}
+.server-editor-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:16px 0}
+.server-editor-photo{position:relative;min-width:0;padding:9px;background:var(--rsw-raised);border-radius:12px;border:1px solid var(--rsw-border)}
+.server-editor-photo img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:8px;margin-bottom:9px}
+.server-editor-photo input{width:100%;box-sizing:border-box;margin:0;padding:9px 12px!important;background:var(--rsw-card)!important;color:var(--rsw-ink)!important;border:1px solid var(--rsw-border)!important;border-radius:8px!important;font-size:11px}
+.server-editor-photo button[data-server-photo-remove]{position:absolute;top:15px;right:15px;min-width:27px;height:27px;border-radius:8px;background:#1b2139d9!important;color:white!important;border-color:#ffffff50!important}
+.server-upload{display:inline-flex!important;align-items:center;margin:7px 0 0;padding:10px 14px;border-radius:10px;background:linear-gradient(120deg,#7053e6,#9272fa)!important;color:white!important;cursor:pointer}
+@media(max-width:720px){.server-profile{padding:17px}.server-photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:445px){.server-editor-gallery{grid-template-columns:1fr}.server-profile-heading h2{font-size:23px}}
