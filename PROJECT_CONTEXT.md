@@ -37,3 +37,12 @@ Vor zukünftigen Änderungen: Aktuellen GitHub-Code, GitHub Actions und Supabase
 - Kategorien haben nun zusätzlich `scope`: `all` (allgemein), `person` (Biografie), `place` (Ort), `event` (Ereignis), `object` (Objekt), `article` (Artikel).
 - Historische Kategorien ohne Scope bleiben **allgemein**. `migrateData()` bewahrt Scope, damit Cloud-Snapshots und JSON-Sicherungen abwärtskompatibel bleiben.
 - Kategorieverwaltung zeigt getrennte Tabs, der Editor nur allgemeine und für den Artikeltyp passende Kategorien. Der Datenbankaufbau selbst wurde nicht geändert.
+
+## Wiederverwendbare Biografie-Dropdowns (04.11.2026)
+- Drei Biografie-Felder haben universelle, vom Admin frei verwaltbare Auswahllisten: `birthplace` (Geburtsort), `occupation` (Tätigkeit) und `significance` (Bedeutung).
+- Im Biografie-Editor stehen jeweils eine Dropdown-Auswahl, ein frei beschreibbares Textfeld sowie die Schaltfläche „Wert für alle Biografien merken“ bereit. Gespeicherte Werte können aus der Liste entfernt werden, ohne vorhandene Biografie-Daten zu löschen.
+- Listen sind **leer, bis der Nutzer selbst Werte anlegt**. Keine vordefinierten Inhalte.
+- Archiv-Format: `biographyPresets: {birthplace: string[], occupation: string[], significance: string[]}`. Dieses Feld gehört zum bestehenden öffentlichen JSON-Snapshot; **keine neuen Supabase-Tabellen**.
+- `migrateData()` übernimmt alte Archive ohne `biographyPresets` ohne Datenverlust. JSON-Exporte enthalten die Listen. Auch beim Leeren von Einträgen bleiben die Listen erhalten.
+- Altes `details.occupation` wird beibehalten, ehemals „Tätigkeit / Bedeutung“. Bedeutung hat nun separat `details.significance`.
+- `premium-theme.css` gestaltet Dropdowns, Merken-Buttons und die Verwaltungschips in Dark/Light Mode.
