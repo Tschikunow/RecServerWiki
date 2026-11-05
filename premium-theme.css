@@ -225,3 +225,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .server-upload{display:inline-flex!important;align-items:center;margin:7px 0 0;padding:10px 14px;border-radius:10px;background:linear-gradient(120deg,#7053e6,#9272fa)!important;color:white!important;cursor:pointer}
 @media(max-width:720px){.server-profile{padding:17px}.server-photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:445px){.server-editor-gallery{grid-template-columns:1fr}.server-profile-heading h2{font-size:23px}}
+
+/* Six archive types: Artikel, Biografie, Ort, Server, Ereignis, Objekt */
+.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.editor-type-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.scope-tabs{grid-template-columns:repeat(7,minmax(0,1fr))}
+@media(max-width:1180px){.scope-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:850px){.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scope-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.editor-type-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scope-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
