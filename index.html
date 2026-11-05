@@ -1092,6 +1092,157 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElement
 window.addEventListener('online',()=>{if(cloud.config&&!cloud.blocked){cloudCheck();if(cloud.dirty)cloudSchedule()}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cloud.config)cloudCheck()});
 cloud.pollTimer=setInterval(()=>{if(cloud.config&&!document.hidden)cloudCheck()},20000);
+const live={shadow:null,oldLocal:null,pending:0,queue:Promise.resolve(),refreshing:null,socket:null,heartbeat:null,lastSocketTry:0};
+function liveClone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x))}
+function liveSame(a,b){return JSON.stringify(a)===JSON.stringify(b)}
+function livePlain(x){return !!x&&typeof x==='object'&&!Array.isArray(x)}
+function livePatchValue(current,before,after){
+ if(liveSame(before,after))return liveClone(current);
+ if(livePlain(before)&&livePlain(after)){
+  const result=livePlain(current)?liveClone(current):{};
+  for(const key of new Set([...Object.keys(before),...Object.keys(after)])){
+   if(liveSame(before[key],after[key]))continue;
+   if(!Object.prototype.hasOwnProperty.call(after,key))delete result[key];
+   else result[key]=livePatchValue(current?.[key],before[key],after[key]);
+  }
+  return result;
+ }
+ return liveClone(after);
+}
+function liveArrayDelta(before,after,current){
+ const b=new Map((before||[]).map(x=>[x.id,x]));
+ const a=new Map((after||[]).map(x=>[x.id,x]));
+ const result=(current||[]).map(x=>liveClone(x));
+ for(const [key,item] of b){
+  if(!a.has(key)){const i=result.findIndex(x=>x.id===key);if(i>=0)result.splice(i,1)}
+  else if(!liveSame(item,a.get(key))){
+   const i=result.findIndex(x=>x.id===key);
+   if(i>=0)result[i]=livePatchValue(result[i],item,a.get(key));
+   else result.unshift(liveClone(a.get(key)));
+  }
+ }
+ for(const [key,item] of a)if(!b.has(key)){
+  const i=result.findIndex(x=>x.id===key);
+  if(i<0)result.unshift(liveClone(item));
+  else result[i]=livePatchValue(result[i],{},item);
+ }
+ return result;
+}
+function liveMergeDelta(base,wanted,remote){
+ const out=liveClone(remote);
+ out.categories=liveArrayDelta(base.categories,wanted.categories,remote.categories);
+ out.exhibits=liveArrayDelta(base.exhibits,wanted.exhibits,remote.exhibits);
+ const old=base.biographyPresets||{},updated=wanted.biographyPresets||{};
+ out.biographyPresets=out.biographyPresets||{};
+ for(const key of ['birthplace','occupation','significance'])if(!liveSame(old[key]||[],updated[key]||[])){
+  const previous=old[key]||[],next=updated[key]||[],current=out.biographyPresets[key]||[];
+  const removed=new Set(previous.filter(x=>!next.includes(x)));
+  out.biographyPresets[key]=[...new Set([...current.filter(x=>!removed.has(x)),...next])].sort((a,b)=>a.localeCompare(b,'de'));
+ }
+ const categories=new Set(out.categories.map(x=>x.id));
+ // Category deletion is a global operation, including entries created by another editor.
+ const removedCategories=(base.categories||[]).filter(x=>!(wanted.categories||[]).some(c=>c.id===x.id));
+ if(removedCategories.length)out.exhibits.forEach(x=>x.categories=(x.categories||[]).filter(k=>categories.has(k)));
+ return out;
+}
+function liveDisplay(remote,meta,first=false){
+ if(live.pending>0)return;
+ const x=migrateData(remote);
+ live.shadow=liveClone(x);
+ state=x;
+ cloudApplyMeta(meta);
+ cloud.dirty=false;cloud.blocked=false;cloud.failure=false;cloud.initialized=true;
+ if(app.view==='detail'&&!getEntry(app.detailId)){app.view='library';app.detailId=null}
+ const position=window.scrollY;
+ render();
+ if(!first)window.scrollTo({top:position,behavior:'instant'});
+ cloudStatus('Live verbunden. Alle sehen dasselbe öffentliche Archiv.','ready');
+ if(document.getElementById('cloudModal'))cloudRenderModal();
+}
+async function liveRefresh(force=false){
+ if(!cloud.config||live.pending>0)return false;
+ if(live.refreshing)return live.refreshing;
+ live.refreshing=(async()=>{
+  try{
+   const meta=await cloudGetMeta();
+   if(!meta)throw Error('Das öffentliche Wiki ist nicht erreichbar.');
+   if(!force&&live.shadow&&Number(meta.revision)===cloud.revision)return true;
+   const archive=await cloudDownloadFile(meta);
+   if(live.pending>0)return false;
+   liveDisplay(archive,meta,!live.shadow);
+   return true;
+  }catch(error){cloudOnError(error);return false}
+  finally{live.refreshing=null}
+ })();
+ return live.refreshing;
+}
+async function liveCommit(base,wanted){
+ if(!cloudCanEdit())throw Error('Bitte als Administrator oder Redakteur anmelden.');
+ let lastError=null;
+ for(let attempt=0;attempt<8;attempt++){
+  let uploaded=null;
+  try{
+   const remoteMeta=await cloudGetMeta();
+   if(!remoteMeta)throw Error('Supabase: kein öffentlicher Wiki-Stand vorhanden.');
+   const remote=await cloudDownloadFile(remoteMeta);
+   const merged=migrateData(liveMergeDelta(base,wanted,remote));
+   if(liveSame(merged,migrateData(remote))){
+    live.shadow=liveClone(merged);
+    cloudApplyMeta(remoteMeta);
+    if(live.pending<=1){state=merged;render()}
+    cloudStatus('Live synchronisiert.','ready');return true;
+   }
+   const raw=JSON.stringify(merged),bytes=new Blob([raw]).size;
+   if(bytes>45*1024*1024)throw Error('Das öffentliche Archiv ist zu groß (45 MB). Bilder reduzieren.');
+   const checksum=cloudFingerprint(merged);
+   uploaded='snapshot_'+Date.now()+'_'+Math.random().toString(36).slice(2,10)+'.json';
+   await cloudFetch('/storage/v1/object/'+CLOUD_BUCKET+'/'+cloudFilePath(uploaded),{auth:true,method:'POST',headers:{'Content-Type':'application/json','x-upsert':'false'},body:raw});
+   const next={revision:Number(remoteMeta.revision)+1,file_name:uploaded,previous_file_name:remoteMeta.file_name||null,checksum,updated_at:new Date().toISOString()};
+   const result=await cloudFetch('/rest/v1/'+CLOUD_TABLE+'?key=eq.'+CLOUD_KEY+'&revision=eq.'+Number(remoteMeta.revision),{auth:true,method:'PATCH',headers:{'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(next)});
+   if(!result?.length){await cloudDeleteFile(uploaded);continue}
+   live.shadow=liveClone(merged);
+   cloudApplyMeta(result[0]);
+   cloud.dirty=false;cloud.blocked=false;cloud.failure=false;
+   if(live.pending<=1){state=merged;render()}
+   cloudStatus('Live gespeichert. Änderungen sind für alle sichtbar.','ready');
+   if(remoteMeta.previous_file_name&&remoteMeta.previous_file_name!==remoteMeta.file_name)cloudDeleteFile(remoteMeta.previous_file_name);
+   if(document.getElementById('cloudModal'))cloudRenderModal();
+   return true;
+  }catch(error){
+   lastError=error;
+   if(uploaded)try{await cloudDeleteFile(uploaded)}catch(e){}
+   if(/JWT|token|401|403/i.test(String(error?.message||error)))break;
+   if(attempt===7)break;
+  }
+ }
+ throw lastError||Error('Gleichzeitige Änderungen konnten nicht übernommen werden. Bitte erneut speichern.');
+}
+function liveConnect(){
+ if(!cloud.config||!window.WebSocket||live.socket?.readyState===1||live.socket?.readyState===0)return;
+ if(Date.now()-live.lastSocketTry<15000)return;
+ live.lastSocketTry=Date.now();
+ try{
+  const url=cloud.config.url.replace(/^http/i,'ws')+'/realtime/v1/websocket?apikey='+encodeURIComponent(cloud.config.key)+'&vsn=1.0.0';
+  const ws=new WebSocket(url);
+  live.socket=ws;
+  let seq=0;
+  ws.onopen=()=>{
+   const ref=String(++seq);
+   ws.send(JSON.stringify({topic:'realtime:public:recserverwiki_shared',event:'phx_join',payload:{config:{broadcast:{self:false},presence:{key:''},postgres_changes:[{event:'UPDATE',schema:'public',table:'recserverwiki_shared'}]}},ref,join_ref:ref}));
+   if(live.heartbeat)clearInterval(live.heartbeat);
+   live.heartbeat=setInterval(()=>{if(ws.readyState===1)ws.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++seq)}))},25000);
+  };
+  ws.onmessage=event=>{
+   try{const data=JSON.parse(event.data);if(data.event==='postgres_changes'||data.event==='UPDATE')liveRefresh()}catch(e){}
+  };
+  ws.onclose=()=>{if(live.heartbeat)clearInterval(live.heartbeat);live.heartbeat=null;if(live.socket===ws)live.socket=null};
+  ws.onerror=()=>{try{ws.close()}catch(e){}};
+ }catch(e){console.warn('Live-Socket nicht verfügbar, nutze regelmäßige Aktualisierung',e)}
+}
+function liveDisconnect(){
+ if(live.heartbeat)clearInterval(live.heartbeat);live.heartbeat=null;
+ if(live.socket){try{live.socket.close()}catch(e){};live.socket=null}
+}
 // Never show old local drafts to guests before the public archive is loaded.
 (async()=>{state={exhibits:[],categories:[],biographyPresets:emptyBiographyPresets()};render();await cloudInitialize()})();
 </script></body></html>
