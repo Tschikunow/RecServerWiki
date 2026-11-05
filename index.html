@@ -464,7 +464,61 @@ function readInput(el){if(!app.editing)return;const e=app.editing;const value=el
  }
  if(el.dataset.serverPhotoCaption!==undefined){const p=e.serverPhotos?.[Number(el.dataset.serverPhotoCaption)];if(p){p.caption=String(value).slice(0,180);setDirty()}return}if(el.dataset.entryTheme!==undefined){e.theme=safeColor(value);setDirty();return}if(el.dataset.entryCat!==undefined){const k=el.dataset.entryCat;e.categories=e.categories||[];e.categories=value?[...new Set([...e.categories,k])]:e.categories.filter(x=>x!==k);setDirty();return}if(el.dataset.link!==undefined){const k=el.dataset.link;e.related=e.related||[];e.related=value?[...new Set([...e.related,k])]:e.related.filter(x=>x!==k);setDirty();return}if(el.dataset.detailField!==undefined){e.details=e.details||{};e.details[el.dataset.detailField]=value;setDirty();return}if(el.dataset.fact!==undefined){const obj=e.facts?.[Number(el.dataset.fact)];if(obj)obj[el.dataset.factProp]=value;setDirty();return}if(el.dataset.field){e[el.dataset.field]=el.dataset.field==='tags'?value.split(',').map(x=>x.trim()).filter(Boolean):value;setDirty();return}if(el.dataset.block!==undefined){const b=e.blocks[Number(el.dataset.block)];if(!b)return;if(el.dataset.image!==undefined){const img=b.images?.[Number(el.dataset.image)];if(img)img[el.dataset.imageProp]=value}else if(el.dataset.item!==undefined){const index=Number(el.dataset.item);if(el.dataset.itemProp==='value'&&b.type==='list')b.items[index]=value;else if(b.items[index])b.items[index][el.dataset.itemProp]=value}else if(el.dataset.prop)b[el.dataset.prop]=value;setDirty()}}
 async function fileToImage(file){if(!file||!file.type.startsWith('image/'))throw Error('Bitte eine Bilddatei auswählen.');if(file.size>30*1024*1024)throw Error('Bild ist zu groß (max. 30 MB).');return await new Promise((resolve,reject)=>{let fr=new FileReader();fr.onerror=()=>reject(Error('Bilddatei konnte nicht gelesen werden.'));fr.onload=()=>{const img=new Image();img.onerror=()=>reject(Error('Bildformat nicht unterstützt.'));img.onload=()=>{let max=1600,scale=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',.83))};img.src=fr.result};fr.readAsDataURL(file)})}
-async function saveExhibit(){const e=app.editing;if(!e)return;e.categories=(e.categories||[]).filter(key=>{const c=getCategory(key);return c&&categoryMatchesEntry(c,e.type)});if(!String(e.title).trim()){toast('Bitte zuerst einen Titel eingeben.');document.querySelector('[data-field="title"]')?.focus();return}e.title=e.title.trim();e.updatedAt=new Date().toISOString();const oldState=JSON.parse(JSON.stringify(state));if(app.isNew)state.exhibits.unshift(e);else{const i=state.exhibits.findIndex(x=>x.id===e.id);if(i<0)return;state.exhibits[i]=e}try{await saveState();app.editing=null;app.dirty=false;$('#drawerHost').innerHTML='';document.body.style.overflow='';openArticle(e.id);toast('Eintrag gespeichert.')}catch{state=oldState}}
+async function saveExhibit(){
+ const e=app.editing;
+ if(!e)return;
+ if(!cloudCanEdit()){
+  toast('Zum Speichern bitte als Admin oder Redakteur anmelden.');
+  return;
+ }
+ // Always copy the currently visible form fields into the draft before saving.
+ // This also covers native selects / text fields whose input event was missed.
+ try{
+  document.querySelectorAll('.drawer [data-field],.drawer [data-detail-field],.drawer [data-server-photo-caption],.drawer [data-server-moderator]').forEach(control=>readInput(control));
+ }catch(error){console.warn('Formular konnte nicht vollständig übernommen werden',error)}
+ e.title=String(e.title||'').trim();
+ if(!e.title){
+  toast('Bitte oben den '+(e.type==='server'?'Servernamen':'Titel')+' eingeben. Nur dieses Feld ist Pflicht.');
+  document.querySelector('.drawer [data-field="title"]')?.focus();
+  return;
+ }
+ e.categories=(e.categories||[]).filter(key=>{const c=getCategory(key);return c&&categoryMatchesEntry(c,e.type)});
+ e.updatedAt=new Date().toISOString();
+ const before=JSON.parse(JSON.stringify(state));
+ const record=JSON.parse(JSON.stringify(e));
+ if(app.isNew)state.exhibits.unshift(record);
+ else{
+  const index=state.exhibits.findIndex(x=>x.id===e.id);
+  if(index<0){toast('Eintrag nicht gefunden. Bitte die aktuelle Sammlung neu laden.');return}
+  state.exhibits[index]=record;
+ }
+ const button=document.querySelector('.drawer [data-act="save-exhibit"]');
+ if(button){button.disabled=true;button.textContent='Speichert …'}
+ try{
+  await saveState();
+ }catch(error){
+  state=before;
+  if(button){button.disabled=false;button.textContent='✓ Speichern'}
+  console.error('Fehler beim lokalen Speichern',error);
+  const reason=String(error?.message||error||'Unbekannter Speicherfehler').slice(0,120);
+  toast('Speichern fehlgeschlagen: '+reason+'. Bitte JSON-Sicherung nutzen.');
+  return;
+ }
+ // The record is already persisted. A preview/render error must not undo it.
+ app.editing=null;app.dirty=false;app.isNew=false;
+ const host=document.getElementById('drawerHost');if(host)host.innerHTML='';
+ document.body.style.overflow='';
+ try{
+  openArticle(record.id);
+ }catch(error){
+  console.error('Eintrag gespeichert, aber Vorschau fehlgeschlagen',error);
+  app.view='library';
+  try{render()}catch(renderError){console.error('Archivansicht konnte nicht gezeichnet werden',renderError)}
+  toast('Eintrag gespeichert. Anzeigeproblem: bitte neu laden.');
+  return;
+ }
+ toast(cloud.blocked?'Lokal gespeichert. Versionskonflikt: unter Cloud & Synchronisierung veröffentlichen.':'Eintrag gespeichert.');
+}
 async function deleteExhibit(){const e=app.editing;if(!e)return;if(!confirm('„'+e.title+'“ wirklich löschen?'))return;const old=JSON.parse(JSON.stringify(state));state.exhibits=state.exhibits.filter(x=>x.id!==e.id);state.exhibits.forEach(x=>x.related=(x.related||[]).filter(k=>k!==e.id));try{await saveState();app.editing=null;app.dirty=false;$('#drawerHost').innerHTML='';document.body.style.overflow='';navigate('library');toast('Eintrag gelöscht.')}catch{state=old}}
 async function toggleFavorite(key){const e=getEntry(key);if(!e)return;const old=e.starred;e.starred=!old;try{await saveState();render()}catch{e.starred=old}}
 async function createCategory(name,color,scope=app.editing?.type||app.categoryScope||'all'){
@@ -834,7 +888,7 @@ async function cloudInitialize(){
  await cloudReconcile();
 }
 const saveStateWithoutCloud=saveState;
-saveState=async function(){const result=await saveStateWithoutCloud();cloudAfterLocalSave();return result};
+saveState=async function(){const result=await saveStateWithoutCloud();try{cloudAfterLocalSave()}catch(error){console.warn('Lokales Speichern erfolgreich, Cloud-Synchronisierung konnte nicht gestartet werden',error)}return result};
 const renderWithoutCloud=render;
 render=function(){renderWithoutCloud();cloudStatus(cloud.lastMessage,cloud.status)};
 // Read-only is enforced by Supabase RLS; interface also blocks editing controls.
