@@ -98,6 +98,8 @@ try{
  assert.deepEqual(counts[0],['McDuckyman','Neusenat']);
 
  const server=files.get(remote.file_name).exhibits.find(x=>x.type==='server');
+ await a.evaluate(id=>openArticle(id),server.id);
+ await b.evaluate(id=>openArticle(id),server.id);
  await a.locator('[data-edit="'+server.id+'"]').first().click();
  await b.locator('[data-edit="'+server.id+'"]').first().click();
  await a.locator('.drawer [data-detail-field="serverVisits"]').fill('400');
