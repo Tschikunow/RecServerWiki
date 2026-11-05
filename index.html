@@ -182,67 +182,106 @@ const makeBlock=type=>{
  switch(type){case'heading':return{type,title:''};case'text':return{type,text:''};case'list':return{type,items:['']};case'accordion':return{type,title:'',text:''};case'faq':return{type,items:[{question:'',answer:''}]};case'timeline':return{type,items:[{date:'',text:''}]};case'gallery':return{type,images:[]};case'table':return{type,items:[{key:'',value:''}]};case'sources':return{type,items:[{title:'',url:''}]};case'quote':return{type,text:'',source:''};case'callout':return{type,title:'',text:''};default:return{type:'divider'}}
 };
 const dbName='recserverwiki_shared_v1';let memoryFallback=false,dbPromise;
-function openDb(){if(dbPromise)return dbPromise;dbPromise=new Promise((res,rej)=>{if(!window.indexedDB){rej(Error('IndexedDB nicht verfügbar'));return}const req=indexedDB.open(dbName,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('storage'))req.result.createObjectStore('storage')};req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error)});return dbPromise}
-async function readState(){
- // A previously activated fallback must take priority over stale IndexedDB data.
- try{
-  if(localStorage.getItem(dbName+'_fallback')==='1'){
-   memoryFallback=true;
-   const raw=localStorage.getItem(dbName);
-   return raw?JSON.parse(raw):null;
-  }
- }catch(error){console.warn('Fallback-Markierung konnte nicht gelesen werden',error)}
- try{
-  const db=await openDb();
-  return await new Promise((resolve,reject)=>{
-   const tx=db.transaction('storage','readonly'),req=tx.objectStore('storage').get('collection');
-   req.onsuccess=()=>resolve(req.result);
-   req.onerror=()=>reject(req.error);
-   tx.onerror=()=>reject(tx.error);
-  });
- }catch(error){
-  memoryFallback=true;
-  console.warn('IndexedDB nicht lesbar, verwende Browser-Ersatzspeicher',error);
-  try{
-   const raw=localStorage.getItem(dbName);
-   return raw?JSON.parse(raw):null;
-  }catch{return null}
- }
+function openDb(){
+ if(dbPromise)return dbPromise;
+ dbPromise=new Promise((resolve,reject)=>{
+  if(!window.indexedDB){reject(Error('IndexedDB nicht verfügbar'));return}
+  const req=indexedDB.open(dbName,1);
+  req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('storage'))req.result.createObjectStore('storage')};
+  req.onsuccess=()=>{const db=req.result;db.onversionchange=()=>{db.close();dbPromise=null};resolve(db)};
+  req.onerror=()=>reject(req.error||Error('IndexedDB-Öffnen fehlgeschlagen'));
+ });
+ // Failed open requests must be retryable; never cache a rejected Promise forever.
+ dbPromise=dbPromise.catch(error=>{dbPromise=null;throw error});
+ return dbPromise;
 }
-async function saveState(){
- let raw;
- try{raw=JSON.stringify(state)}catch(error){
-  toast('Speichern fehlgeschlagen: Ungültige Artikeldaten. Bitte JSON-Sicherung erstellen.');
-  throw error;
- }
- const fallbackSave=()=>{
-  localStorage.setItem(dbName,raw);
-  localStorage.setItem(dbName+'_fallback','1');
-  memoryFallback=true;
- };
+async function storeInIndexedDb(value){
+ let db;
  try{
-  if(memoryFallback){fallbackSave();return}
-  const db=await openDb();
+  db=await openDb();
   await new Promise((resolve,reject)=>{
    const tx=db.transaction('storage','readwrite');
-   tx.objectStore('storage').put(state,'collection');
+   tx.objectStore('storage').put(value,'collection');
    tx.oncomplete=()=>resolve();
    tx.onabort=()=>reject(tx.error||Error('IndexedDB-Transaktion abgebrochen'));
    tx.onerror=()=>reject(tx.error||Error('IndexedDB-Schreibfehler'));
   });
  }catch(error){
-  console.warn('IndexedDB-Schreiben fehlgeschlagen',error);
-  if(!memoryFallback){
-   try{
-    fallbackSave();
-    toast('Browser-Datenbank nicht verfügbar. Artikel ersatzweise lokal gesichert; bitte JSON-Sicherung herunterladen.');
-    return;
-   }catch(fallbackError){
-    console.warn('Auch der Ersatzspeicher ist nicht verfügbar',fallbackError);
-   }
-  }
-  toast('Speichern fehlgeschlagen: Browser-Speicher voll oder blockiert. Bitte Bilder reduzieren oder JSON-Sicherung erstellen.');
+  // A connection may have been closed by the browser. Allow a fresh open next time.
+  if(db){try{db.close()}catch(e){}}
+  dbPromise=null;
   throw error;
+ }
+}
+async function readState(){
+ let fallback=null,marked=false;
+ try{
+  marked=localStorage.getItem(dbName+'_fallback')==='1';
+  const raw=marked?localStorage.getItem(dbName):null;
+  fallback=raw?JSON.parse(raw):null;
+ }catch(e){console.warn('Lokaler Ersatzspeicher beschädigt',e)}
+ // An old fallback must be migrated BACK to IndexedDB as soon as possible,
+ // otherwise a permanent flag forces the whole archive into a tiny 5-MB localStorage.
+ if(marked&&fallback&&Array.isArray(fallback.exhibits)){
+  try{
+   await storeInIndexedDb(fallback);
+   memoryFallback=false;
+   try{localStorage.removeItem(dbName+'_fallback');localStorage.removeItem(dbName)}catch(e){}
+   return fallback;
+  }catch(e){
+   console.warn('IndexedDB-Wiederherstellung nicht möglich, Ersatzspeicher bleibt aktiv',e);
+   memoryFallback=true;
+   return fallback;
+  }
+ }
+ try{
+  const db=await openDb();
+  const saved=await new Promise((resolve,reject)=>{
+   const tx=db.transaction('storage','readonly');
+   const req=tx.objectStore('storage').get('collection');
+   req.onsuccess=()=>resolve(req.result||null);
+   req.onerror=()=>reject(req.error||Error('IndexedDB-Lesefehler'));
+   tx.onerror=()=>reject(tx.error||Error('IndexedDB-Transaktion fehlgeschlagen'));
+  });
+  memoryFallback=false;
+  if(marked)try{localStorage.removeItem(dbName+'_fallback')}catch(e){}
+  return saved;
+ }catch(e){
+  console.warn('IndexedDB nicht lesbar',e);
+  memoryFallback=true;
+  return fallback;
+ }
+}
+async function saveState(){
+ // IndexedDB handles multi-MB archives; localStorage has a tiny fixed quota.
+ // Always retry IndexedDB, even if the previous session used localStorage.
+ try{
+  await storeInIndexedDb(state);
+  memoryFallback=false;
+  try{
+   if(localStorage.getItem(dbName+'_fallback')==='1'){
+    localStorage.removeItem(dbName+'_fallback');
+    localStorage.removeItem(dbName);
+   }
+  }catch(e){}
+  return;
+ }catch(error){
+  console.warn('IndexedDB konnte Archiv nicht speichern',error);
+  // Only attempt fallback when it actually fits. Never create the marker first.
+  try{
+   const raw=JSON.stringify(state);
+   localStorage.setItem(dbName,raw);
+   localStorage.setItem(dbName+'_fallback','1');
+   memoryFallback=true;
+   toast('Browser-Datenbank nicht verfügbar. Eine lokale Ersatzkopie wurde angelegt; bitte JSON-Sicherung herunterladen.');
+   return;
+  }catch(other){
+   console.warn('Ersatzspeicher ist voll oder nicht nutzbar',other);
+   const problem=String(other?.name||other?.message||other);
+   throw Error(problem==='QuotaExceededError'||/quota/i.test(problem)
+    ?'Browser-Ersatzspeicher ist voll. Das Archiv passt nicht in localStorage.'
+    :'Browser-Datenbank und Ersatzspeicher nicht verfügbar.');
+  }
  }
 }
 let state={exhibits:[],categories:[],biographyPresets:emptyBiographyPresets()};
