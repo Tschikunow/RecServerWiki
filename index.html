@@ -191,46 +191,109 @@ const sortNewest=arr=>arr.slice().sort((a,b)=>new Date(b.updatedAt||0)-new Date(
 const getEntry=key=>state.exhibits.find(x=>x.id===key);
 const getCategory=key=>state.categories.find(x=>x.id===key);
 const entryCats=e=>(e.categories||[]).map(getCategory).filter(Boolean);
-const SERVER_FIELDS=[['serverOwner','Owner'],['serverCoOwner','Co-Owner'],['serverCurrency','Währung']];
+const SERVER_FIELDS=[["serverCurrency","Währung"],["serverClubName","Club"]];
+const SERVER_STATS=[["serverVisits","Visits"],["serverRegularVisitors","Regelmäßige Besucher"],["serverClubMembers","Clubmitglieder"],["serverClubRegularMembers","Regelmäßige Clubmitglieder"]];
 function isServerLocation(e){return !!e&&e.type==='server'}
 function serverPhotos(e){
  return (Array.isArray(e?.serverPhotos)?e.serverPhotos:[]).slice(0,8)
   .filter(x=>x&&typeof x==='object'&&safeImage(x.src))
   .map(x=>({src:safeImage(x.src),caption:String(x.caption||'').slice(0,180)}));
 }
+function serverTextList(value){
+ return String(value||'').split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean).slice(0,40);
+}
+function serverBiographyChoices(){
+ return state.exhibits.filter(x=>x.type==='person').slice().sort((a,b)=>a.title.localeCompare(b.title,'de'));
+}
+function serverSelectedPerson(rawId,legacyName=''){
+ const selected=getEntry(String(rawId||'').trim());
+ if(selected?.type==='person')return selected;
+ const name=String(legacyName||'').trim().toLocaleLowerCase('de');
+ return name?serverBiographyChoices().find(x=>x.title.trim().toLocaleLowerCase('de')===name)||null:null;
+}
+function serverModeratorIds(e){
+ const raw=String(e?.details?.serverModeratorIds||'');
+ return [...new Set(raw.split(',').map(id=>id.trim()).filter(Boolean))].slice(0,100);
+}
+function serverRoleButton(person,legacy){
+ if(person)return `<button type="button" class="server-person-link" data-open="${esc(person.id)}" title="Biografie von ${esc(person.title)} öffnen">${esc(person.title)} <span aria-hidden="true">↗</span></button>`;
+ return legacy?`<span class="server-person-legacy">${esc(legacy)}</span>`:'';
+}
+function serverTeam(e){
+ const details=e.details||{},owner=serverSelectedPerson(details.serverOwnerId,details.serverOwner);
+ const coOwner=serverSelectedPerson(details.serverCoOwnerId,details.serverCoOwner);
+ const moderators=serverModeratorIds(e).map(getEntry).filter(x=>x&&x.type==='person');
+ const oldMods=serverTextList(details.serverModerators);
+ const hasTeam=owner||coOwner||moderators.length||details.serverOwner||details.serverCoOwner||oldMods.length;
+ if(!hasTeam)return '';
+ const role=(label,person,legacy)=>person||legacy?`<div class="server-team-role"><div class="server-team-label">${label}</div><div class="server-team-value">${serverRoleButton(person,legacy)}</div></div>`:'';
+ return `<section class="server-team"><h3>Team & Verwaltung</h3><div class="server-team-grid">
+  ${role('Owner',owner,owner?'':details.serverOwner)}
+  ${role('Co-Owner',coOwner,coOwner?'':details.serverCoOwner)}
+  ${(moderators.length||oldMods.length)?`<div class="server-team-role server-team-moderators"><div class="server-team-label">Moderatoren</div><div class="server-team-value">${moderators.map(person=>serverRoleButton(person,'')).join('')}${oldMods.filter(name=>!moderators.some(p=>p.title.toLocaleLowerCase('de')===name.toLocaleLowerCase('de'))).map(name=>serverRoleButton(null,name)).join('')}</div></div>`:''}
+ </div></section>`;
+}
 function serverProfile(e){
  if(!isServerLocation(e))return '';
- const description=String(e.details?.serverDescription||'').trim();
- const allies=String(e.details?.serverAllies||'').split(/[\n,;]+/).map(v=>v.trim()).filter(Boolean).slice(0,40);
- const photos=serverPhotos(e);
- if(!description&&!allies.length&&!photos.length)return '';
+ const d=e.details||{},description=String(d.serverDescription||'').trim();
+ const allies=serverTextList(d.serverAllies),inventions=serverTextList(d.serverInventions),companies=serverTextList(d.serverCompanies);
+ const stats=SERVER_STATS.filter(([key])=>String(d[key]??'').trim());
+ const photos=serverPhotos(e),team=serverTeam(e);
+ if(!description&&!allies.length&&!photos.length&&!team&&!stats.length&&!inventions.length&&!companies.length)return '';
+ const chips=(title,items)=>items.length?`<div class="server-profile-allies"><h3>${title}</h3><div class="server-ally-list">${items.map(v=>`<span class="server-ally">${esc(v)}</span>`).join('')}</div></div>`:'';
  return `<section class="server-profile">
   <div class="server-profile-heading"><div class="eyebrow">REC ROOM / SERVERARCHIV</div><h2>Serverprofil</h2></div>
+  ${stats.length?`<div class="server-stats-grid">${stats.map(([key,label])=>`<div class="server-stat"><span>${esc(label)}</span><strong>${esc(d[key])}</strong></div>`).join('')}</div>`:''}
+  ${team}
   ${description?`<div class="server-profile-description"><h3>Über diesen Server</h3>${paragraphs(description)}</div>`:''}
+  ${inventions.length?chips('Verwendete Inventions',inventions):''}
+  ${companies.length?chips('Unternehmen & Gruppen',companies):''}
   ${allies.length?`<div class="server-profile-allies"><h3>Verbündete Server & Räume</h3><div class="server-ally-list">${allies.map(v=>{const target=state.exhibits.find(x=>isServerLocation(x)&&String(x.title||'').toLocaleLowerCase('de')===v.toLocaleLowerCase('de'));return target?`<button type="button" class="server-ally" data-open="${esc(target.id)}">${esc(v)} ↗</button>`:`<span class="server-ally">${esc(v)}</span>`}).join('')}</div></div>`:''}
   ${photos.length?`<div class="server-photo-gallery"><h3>Bilderalbum <small>${photos.length} ${photos.length===1?'Bild':'Bilder'}</small></h3><div class="server-photo-grid">${photos.map((p,i)=>`<figure><img src="${p.src}" alt="${esc(p.caption||'Server-Screenshot '+(i+1))}" loading="lazy"><figcaption>${esc(p.caption||'')}</figcaption></figure>`).join('')}</div></div>`:''}
  </section>`;
 }
+function serverRoleSelect(details,key,label,legacyKey){
+ const storedId=String(details[key]||'');
+ const match=serverSelectedPerson(storedId,details[legacyKey]);
+ const people=serverBiographyChoices();
+ const hasStale=storedId&&!people.some(p=>p.id===storedId);
+ const options=people.map(p=>`<option value="${esc(p.id)}" ${p.id===(storedId||match?.id)?'selected':''}>${esc(p.title)}</option>`).join('');
+ return `<label class="field server-person-select"><span>${esc(label)} · Biografie</span><select data-detail-field="${esc(key)}">
+  <option value="">${people.length?'Keine Biografie ausgewählt':'Noch keine Biografien vorhanden'}</option>
+  ${hasStale?`<option selected value="${esc(storedId)}">Bisherige Biografie nicht verfügbar</option>`:''}
+  ${options}
+ </select>${!match&&details[legacyKey]?`<small>Bisheriger Eintrag: ${esc(details[legacyKey])}. Zum Verlinken eine Biografie auswählen.</small>`:''}</label>`;
+}
 function serverDetailsEditor(e){
- const details=e.details||{};
+ const d=e.details||{},people=serverBiographyChoices(),moderators=serverModeratorIds(e);
  return `<section class="editor-section server-editor-section">
-  <div class="editor-section-head"><div><div class="eyebrow">REC ROOM / SERVERDATEN</div><h3>Dein Serverprofil</h3><p class="editor-help">Eigener Archivstücktyp „Server“. Ortsangaben bleiben ausschließlich bei „Ort“.</p></div></div>
-  <div class="editor-grid">${SERVER_FIELDS.map(([key,label])=>`<label class="field"><span>${esc(label)}</span><input type="text" data-detail-field="${key}" value="${esc(details[key]||'')}" placeholder="${esc(label)} des Servers"></label>`).join('')}</div>
-  <label class="field"><span>Beschreibung des Servers</span><textarea data-detail-field="serverDescription" rows="4" placeholder="Geschichte, Besonderheiten, Aktivitäten und alles Wissenswerte …">${esc(details.serverDescription||'')}</textarea></label>
-  <label class="field"><span>Verbündete Server & Räume</span><textarea data-detail-field="serverAllies" rows="3" placeholder="Ein Server oder Raum pro Zeile, alternativ mit Komma getrennt">${esc(details.serverAllies||'')}</textarea></label>
-  <p class="editor-help">Servername = Titel des Archivstücks. Das Titelbild stellst du unten bei „Bild & Gestaltung“ ein.</p>
+  <div class="editor-section-head"><div><div class="eyebrow">REC ROOM / SERVERDATEN</div><h3>Dein Serverprofil</h3><p class="editor-help">Eigener Archivstücktyp „Server“ mit Rec-Room-Daten. Der Servername ist der Titel, das Titelbild stellst du unten ein.</p></div></div>
+  <div class="server-editor-subtitle">Besucher & Club</div>
+  <div class="editor-grid">${SERVER_STATS.map(([key,label])=>`<label class="field"><span>${esc(label)}</span><input type="text" inputmode="numeric" data-detail-field="${key}" value="${esc(d[key]||'')}" placeholder="0"></label>`).join('')}
+  ${SERVER_FIELDS.map(([key,label])=>`<label class="field"><span>${esc(label)}</span><input type="text" data-detail-field="${key}" value="${esc(d[key]||'')}" placeholder="${esc(label)}"></label>`).join('')}</div>
+  <div class="server-editor-subtitle">Owner, Co-Owner & Moderatoren</div>
+  <p class="editor-help">Wähle vorhandene Biografien. Auf der veröffentlichten Serverseite öffnen die Namen direkt die Biografie. ${people.length?'':'Erstelle zunächst mindestens eine Biografie.'}</p>
+  <div class="editor-grid">${serverRoleSelect(d,'serverOwnerId','Owner','serverOwner')}${serverRoleSelect(d,'serverCoOwnerId','Co-Owner','serverCoOwner')}</div>
+  <div class="server-moderator-picker"><div class="field"><span>Moderatoren · mehrere Biografien auswählbar</span></div>
+   ${people.length?`<div class="server-moderator-list">${people.map(person=>`<label class="server-moderator-choice"><input type="checkbox" data-server-moderator="${esc(person.id)}" ${moderators.includes(person.id)?'checked':''}><span>${esc(person.title)}</span></label>`).join('')}</div>`:'<p class="editor-help">Hier erscheinen deine Biografien als anklickbare Auswahl.</p>'}
+   ${d.serverModerators?`<p class="editor-help">Bisherige Moderatoren (Text): ${esc(d.serverModerators)}</p>`:''}
+  </div>
+  <div class="server-editor-subtitle">Räume & Inhalte</div>
+  <label class="field"><span>Beschreibung des Servers</span><textarea data-detail-field="serverDescription" rows="4" placeholder="Geschichte, Besonderheiten, Aktivitäten und alles Wissenswerte …">${esc(d.serverDescription||'')}</textarea></label>
+  <label class="field"><span>Verwendete Inventions</span><textarea data-detail-field="serverInventions" rows="3" placeholder="Eine Invention pro Zeile">${esc(d.serverInventions||'')}</textarea></label>
+  <label class="field"><span>Unternehmen & Gruppen</span><textarea data-detail-field="serverCompanies" rows="3" placeholder="Ein Unternehmen oder eine Gruppe pro Zeile">${esc(d.serverCompanies||'')}</textarea></label>
+  <label class="field"><span>Verbündete Server & Räume</span><textarea data-detail-field="serverAllies" rows="3" placeholder="Ein Server oder Raum pro Zeile">${esc(d.serverAllies||'')}</textarea></label>
  </section>
  <section class="editor-section server-editor-section">
-  <div class="editor-section-head"><div><div class="eyebrow">REC ROOM / SERVER-SCREENSHOTS</div><h3>Kleines Bilderalbum</h3><p class="editor-help">Bis zu 8 Bilder. Sie erscheinen direkt auf der öffentlichen Server-Profilseite.</p></div></div>
+  <div class="editor-section-head"><div><div class="eyebrow">REC ROOM / SERVER-SCREENSHOTS</div><h3>Kleines Bilderalbum</h3><p class="editor-help">Bis zu 8 Bilder. Sie erscheinen auf der öffentlichen Server-Profilseite.</p></div></div>
   <div class="server-editor-gallery">${serverPhotos(e).map((p,i)=>`<div class="server-editor-photo">
     <img src="${p.src}" alt="${esc(p.caption||'Serverbild '+(i+1))}">
     <input type="text" maxlength="180" data-server-photo-caption="${i}" value="${esc(p.caption)}" placeholder="Bildunterschrift (optional)">
     <button type="button" class="tiny-btn red" data-server-photo-remove="${i}" title="Bild entfernen" aria-label="Bild ${i+1} entfernen">×</button>
    </div>`).join('')}</div>
-  ${(e.serverPhotos||[]).length<8?`<label class="upload-label server-upload">+ Screenshots hinzufügen<input type="file" accept="image/*" multiple data-server-photo-upload></label>`:'<p class="editor-help">Alle 8 Bildplätze belegt. Entferne ein Bild, um ein neues hinzuzufügen.</p>'}
+  ${(e.serverPhotos||[]).length<8?`<label class="upload-label server-upload">+ Screenshots hinzufügen<input type="file" accept="image/*" multiple data-server-photo-upload></label>`:'<p class="editor-help">Alle 8 Bildplätze belegt. Entferne ein Bild für einen neuen Platz.</p>'}
  </section>`;
 }
-
 function categoryScope(c){return c&&TYPES[c.scope]?c.scope:'all'}
 function categoryMatchesEntry(c,type){
  const scope=categoryScope(c);
