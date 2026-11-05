@@ -65,3 +65,12 @@ Vor zukünftigen Änderungen: Aktuellen GitHub-Code, GitHub Actions und Supabase
 - `migrateData()` kennt den neuen Typ über `TYPES`, die bestehenden JSON-Snapshots und Supabase-Tabellen bleiben unverändert. Keine neuen SQL-Migrationen nötig.
 - `premium-theme.css` arrangiert die sechs Archivstücktypen als Raster (Desktop 3×2) und die erweiterten Kategorietabs responsiv.
 - Umwandlung vorhandener Server-Orte: Artikel öffnen → Bearbeiten → oben Eintragstyp „Server“ auswählen → Speichern → über Cloud veröffentlichen. Keine automatische Massenumwandlung.
+
+## Rec-Room-Server: Statistiken und verknüpfte Biografien (05.11.2026)
+- Neues Serverprofil mit frei befüllbaren Zahlen: `serverVisits` (Visits), `serverRegularVisitors` (regelmäßige Besucher), `serverClubMembers` (Clubmitglieder), `serverClubRegularMembers` (regelmäßige Clubmitglieder).
+- Zusätzlich `serverClubName` (Clubname), `serverInventions` (verwendete Inventions), `serverCompanies` (Unternehmen/Gruppen). Bisherige Felder `serverCurrency`, `serverDescription`, `serverAllies`, Titelbild, Bilderalbum und Gründungsjahr bleiben unverändert.
+- Owner und Co-Owner werden **durch Auswahl vorhandener Biografien** festgelegt: `serverOwnerId`, `serverCoOwnerId`. Moderatoren werden als Multi-Auswahl aus Biografien über `serverModeratorIds` (kommagetrennte Artikel-IDs) gespeichert. Alle drei Rollen werden auf der öffentlichen Serverseite per `data-open` zur entsprechenden Biografie verlinkt.
+- Die Werte liegen innerhalb des normalen `details`-Objekts des Eintrags. Das vorhandene `migrateData()` konvertiert Werte in Strings und bewahrt sie in Exporten sowie öffentlichen Supabase-JSON-Snapshots. **Keine Änderung des Datenbankschemas.**
+- Ältere Textfelder `serverOwner`, `serverCoOwner` und ggf. `serverModerators` werden weiter angezeigt und nicht gelöscht. Exact-Match mit vorhandenen Biografietiteln kann als Link angezeigt werden.
+- Neue Darstellung in `premium-theme.css`: Statistik-Kacheln, verlinkte Team-Pills und Checkbox-Auswahl mehrerer Moderatoren. Keine vorgegebenen Personen oder Serverdaten erstellen.
+- Nach der Bearbeitung wie bisher lokal speichern und bei Bedarf über **Cloud & Synchronisierung** veröffentlichen. Bei „Versionskonflikt“ zuerst das vollständige JSON-Archiv sichern.
