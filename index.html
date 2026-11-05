@@ -1243,6 +1243,98 @@ function liveDisconnect(){
  if(live.heartbeat)clearInterval(live.heartbeat);live.heartbeat=null;
  if(live.socket){try{live.socket.close()}catch(e){};live.socket=null}
 }
+
+const oldLiveStartEdit=startEdit;
+startEdit=function(entryId=null,type='article'){
+ oldLiveStartEdit(entryId,type);
+ live.editBase=app.editing?liveClone(app.editing):null;
+};
+cloudRestoreEditorDraft=async function(){
+ if(!cloudCanEdit())return;
+ try{
+  const draft=await readState();
+  if(draft&&Array.isArray(draft.exhibits)&&Array.isArray(draft.categories))live.oldLocal=migrateData(draft);
+ }catch(error){console.warn('Vorhandene lokale Sicherung konnte nicht gelesen werden',error)}
+};
+cloudReconcile=async function(){
+ if(!cloud.config)return false;
+ const loaded=await liveRefresh(true);
+ if(loaded)liveConnect();
+ return loaded;
+};
+cloudPull=async function(meta){
+ if(live.pending>0)return false;
+ try{
+  const archive=await cloudDownloadFile(meta);
+  if(live.pending>0)return false;
+  liveDisplay(archive,meta,!live.shadow);
+  return true;
+ }catch(error){cloudOnError(error);return false}
+};
+cloudCheck=async function(){
+ if(!cloud.config)return false;
+ liveConnect();
+ return await liveRefresh();
+};
+cloudUpload=async function(){
+ // All editor saves are published immediately. Manual sync just checks public freshness.
+ return await liveRefresh(true);
+};
+cloudChooseLocal=async function(){return await liveRefresh(true)};
+cloudChooseRemote=async function(){return await liveRefresh(true)};
+cloudImportLegacy=async function(){
+ toast('Für alte Archive: erst die bisherige JSON-Sicherung herunterladen, dann über „Archiv importieren“ bewusst zusammenführen.');
+};
+cloudAfterLocalSave=function(){};
+cloudSchedule=function(){};
+cloudDiagnoseSave=async function(){
+ cloud.diagnostic='Prüfe den aktuellen gemeinsamen Live-Stand …';cloudRenderModal();
+ try{
+  const meta=await cloudGetMeta();
+  const remote=await cloudDownloadFile(meta);
+  const stored=await readState();
+  cloud.diagnostic=[
+   'LIVE-CLOUD: '+(meta?'Verbunden':'Nicht verfügbar'),
+   'ÖFFENTLICHER STAND: '+(meta?.revision??'—'),
+   'ÖFFENTLICHE ARTIKEL: '+(remote?.exhibits?.length||0),
+   'DAVON SERVER: '+(remote?.exhibits||[]).filter(x=>x.type==='server').length,
+   'ADMINRECHTE: '+(cloudCanEdit()?'Ja':'Nein'),
+   'BROWSER-SICHERUNG: '+(stored?.exhibits?.length||0)+' Artikel (nicht maßgeblich für Live)',
+   'LIVE-STATUS: '+(live.socket?.readyState===1?'WebSocket verbunden':'Automatische Aktualisierung alle 3 Sekunden'),
+   'SPEICHER-VORGÄNGE: '+live.pending
+  ].join('\n');
+ }catch(error){cloud.diagnostic='Live-Diagnose: '+String(error?.message||error)}
+ cloudRenderModal();
+};
+function liveDownloadOldLocal(){
+ if(!live.oldLocal)return;
+ const blob=new Blob([JSON.stringify(live.oldLocal,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='RecServerWiki_AltesLokalesArchiv_'+new Date().toISOString().slice(0,10)+'.json';
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),5000);
+ toast('Altes lokales Archiv als JSON exportiert. Das Live-Wiki bleibt unverändert.');
+}
+saveState=async function(){
+ if(!cloudCanEdit()||!cloud.config)throw Error('Zum Ändern bitte als Admin anmelden.');
+ if(!live.shadow){const ok=await liveRefresh(true);if(!ok||!live.shadow)throw Error('Live-Archiv noch nicht geladen. Verbindung prüfen.')}
+ const before=liveClone(live.shadow);
+ const desired=migrateData(state);
+ live.pending++;
+ cloudStatus('Änderung wird direkt für alle gespeichert …','busy');
+ const job=live.queue.then(()=>liveCommit(before,desired));
+ live.queue=job.catch(()=>{});
+ try{
+  await job;
+  // Browser backup is optional, never the source of truth.
+  try{await saveStateWithoutCloud()}catch(e){console.warn('Browser-Sicherung nicht möglich; öffentlicher Stand ist gespeichert',e)}
+  return true;
+ }finally{
+  live.pending--;
+  if(live.pending===0)liveRefresh().catch(e=>console.warn('Live-Abgleich',e));
+ }
+};
+
 // Never show old local drafts to guests before the public archive is loaded.
 (async()=>{state={exhibits:[],categories:[],biographyPresets:emptyBiographyPresets()};render();await cloudInitialize()})();
 </script></body></html>
