@@ -270,3 +270,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .cloud-diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font:500 11px/1.7 "Segoe UI",system-ui,sans-serif;background:var(--rsw-soft);color:var(--rsw-ink);border:1px solid var(--rsw-border);padding:15px 17px;border-radius:12px;margin:13px 0 16px;max-height:320px;overflow:auto}
 .cloud-diagnostic::selection{background:var(--rsw-ring)}
 #draftStatus{max-width:65%;overflow-wrap:anywhere}
+
+/* Save resilience: explicit unsaved draft export next to save action */
+.editor-save-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.editor-save-actions [data-act="download-draft"]{font-size:11px;min-height:39px;border:1px solid var(--rsw-border)!important;background:var(--rsw-raised)!important;color:var(--rsw-ink)!important;white-space:normal}
+.editor-save-actions [data-act="download-draft"]:hover{border-color:var(--rsw-accent)!important;color:var(--rsw-accent)!important}
+@media(max-width:620px){.editor-save-actions{width:100%;justify-content:space-between}.editor-save-actions .btn{flex:1}.drawer-bottom{flex-wrap:wrap;gap:8px}.drawer-bottom .save-status{width:100%}}
