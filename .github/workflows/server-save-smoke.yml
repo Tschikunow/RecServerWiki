@@ -1,0 +1,26 @@
+name: Server-Speichertest im Browser
+on:
+  push:
+    paths:
+      - index.html
+      - premium-theme.css
+      - tests/server-save-smoke.mjs
+      - .github/workflows/server-save-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  server-save:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test dependency
+        run: npm install --no-save --ignore-scripts playwright@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Create and save Server in a real browser
+        run: node tests/server-save-smoke.mjs
