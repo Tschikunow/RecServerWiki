@@ -1,10 +1,11 @@
-name: Server-Speichertest im Browser
+name: Live-Wiki Mehradmin-Test im Browser
 on:
   push:
     paths:
       - index.html
       - premium-theme.css
       - tests/server-save-smoke.mjs
+      - tests/live-sync-smoke.mjs
       - .github/workflows/server-save-smoke.yml
   workflow_dispatch:
 permissions:
@@ -23,4 +24,4 @@ jobs:
       - name: Install Chromium
         run: npx playwright install chromium
       - name: Create and save Server in a real browser
-        run: node tests/server-save-smoke.mjs
+        run: node tests/live-sync-smoke.mjs
