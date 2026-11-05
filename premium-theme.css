@@ -233,3 +233,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:1180px){.scope-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:850px){.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scope-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.editor-type-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scope-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Rec Room server: visits, club and linked-biography roster */
+.server-editor-subtitle{display:flex;align-items:center;gap:12px;margin:25px 0 14px;color:var(--rsw-accent);font-size:11px;font-weight:790;letter-spacing:1.1px;text-transform:uppercase}
+.server-editor-subtitle:after{content:"";height:1px;flex:1;background:var(--rsw-border)}
+.server-stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:23px}
+.server-stat{min-width:0;display:flex;flex-direction:column;gap:11px;padding:15px 13px;border:1px solid var(--rsw-border);background:var(--rsw-card);border-radius:13px}
+.server-stat span{font-size:10px;font-weight:680;color:var(--rsw-muted);line-height:1.4;min-height:26px}
+.server-stat strong{font-family:Inter,"Segoe UI",system-ui,sans-serif;font-size:clamp(18px,2vw,26px);line-height:1.12;letter-spacing:-.5px;overflow-wrap:anywhere;color:var(--rsw-ink)}
+.server-team{margin:20px 0 24px}
+.server-team h3{margin:0 0 12px;color:var(--rsw-ink);font-size:14px}
+.server-team-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.server-team-role{min-width:0;padding:15px 16px;border:1px solid var(--rsw-border);border-radius:12px;background:var(--rsw-card)}
+.server-team-moderators{grid-column:1/-1}
+.server-team-label{font-size:10px;color:var(--rsw-muted);font-weight:720;text-transform:uppercase;letter-spacing:1.1px;margin-bottom:11px}
+.server-team-value{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.server-person-link{display:inline-flex;align-items:center;justify-content:space-between;gap:11px;max-width:100%;padding:10px 13px;border:1px solid color-mix(in srgb,var(--rsw-accent) 45%,var(--rsw-border));border-radius:11px;background:var(--rsw-soft);color:var(--rsw-ink);font-weight:750;font-size:12px;line-height:1.3;overflow-wrap:anywhere;text-align:left;cursor:pointer;transition:transform .22s,border-color .22s,background .22s}
+.server-person-link:hover{transform:translateY(-2px);border-color:var(--rsw-accent);color:var(--rsw-accent);background:var(--rsw-raised)}
+.server-person-link span{color:var(--rsw-accent);font-size:15px}
+.server-person-legacy{font-size:12px;color:var(--rsw-muted);overflow-wrap:anywhere}
+.server-person-select select{width:100%;height:43px;background:var(--rsw-raised)!important;border:1px solid var(--rsw-border)!important;color:var(--rsw-ink)!important;border-radius:10px!important;padding:9px 12px}
+.server-person-select small{display:block;color:var(--rsw-muted);font-size:10px;line-height:1.6;margin-top:4px}
+.server-moderator-picker{padding:15px;border-radius:14px;border:1px solid var(--rsw-border);background:var(--rsw-raised);margin-bottom:21px}
+.server-moderator-picker .field{margin-bottom:11px}
+.server-moderator-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:260px;overflow-y:auto;padding:2px}
+.server-moderator-choice{display:flex;align-items:center;gap:10px;padding:11px 12px;min-width:0;cursor:pointer;border:1px solid var(--rsw-border);border-radius:10px;background:var(--rsw-card);color:var(--rsw-ink);font-size:12px;font-weight:600;transition:border-color .2s,background .2s}
+.server-moderator-choice:hover{border-color:var(--rsw-accent)}
+.server-moderator-choice:has(input:checked){border-color:var(--rsw-accent);background:var(--rsw-soft)}
+.server-moderator-choice input{accent-color:var(--rsw-accent);height:16px;width:16px;flex:none}
+.server-moderator-choice span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:900px){.server-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.server-stats-grid{gap:7px}.server-stat{padding:12px 10px}.server-team-grid,.server-moderator-list{grid-template-columns:1fr}}
