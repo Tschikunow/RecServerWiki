@@ -56,3 +56,12 @@ Vor zukünftigen Änderungen: Aktuellen GitHub-Code, GitHub Actions und Supabase
 - `migrateData()` bewahrt `serverPhotos` bei Cloud-Synchronisierung, Import und Export; alte Orte ohne das Feld funktionieren unverändert.
 - UI: `serverProfile()`, `serverDetailsEditor()`, CSS in `premium-theme.css`. Keine Supabase-Schemaänderung.
 - Beim Speichern werden Änderungen zuerst lokal abgelegt. Bei Versionskonflikt muss der Admin seine richtige lokale Version bewusst im Cloud-Dialog veröffentlichen, damit sie auf Handy/Inkognito sichtbar ist.
+
+## Server ist eigener Archivstücktyp (05.11.2026, jüngste Änderung)
+- Nach Wunsch des Betreibers ist `Server` **kein Sonderfall von `Ort` mehr**, sondern ein eigener Archivstücktyp `type:'server'` neben `article`, `person`, `place`, `event`, `object`.
+- Der Eintragstyp `Ort` behält alle bisherigen geographischen Felder unverändert. Bei `Server` erscheinen stattdessen Owner, Co-Owner, Währung, Beschreibung, verbündete Server/Räume und Bilderalbum (max. 8 Screenshots).
+- `isServerLocation(e)` prüft nun ausschließlich `e.type==='server'`, nicht mehr die Kategorienamen. Ein Ort mit der Kategorie „Großer Server“ bleibt ein Ort, bis sein Typ ausdrücklich im Editor auf „Server“ geändert wird.
+- Neue separate Kategoriegruppe `server` in der Kategorien-Verwaltung. Bestehende Ortskategorien mit dem Wort „Server“ wie „Großer Server“, „Mittelgroßer Server“, „Kleiner Server“ bleiben beim neuen Servertyp auswählbar, damit bisherige Kategorien bei einer manuellen Umwandlung erhalten werden.
+- `migrateData()` kennt den neuen Typ über `TYPES`, die bestehenden JSON-Snapshots und Supabase-Tabellen bleiben unverändert. Keine neuen SQL-Migrationen nötig.
+- `premium-theme.css` arrangiert die sechs Archivstücktypen als Raster (Desktop 3×2) und die erweiterten Kategorietabs responsiv.
+- Umwandlung vorhandener Server-Orte: Artikel öffnen → Bearbeiten → oben Eintragstyp „Server“ auswählen → Speichern → über Cloud veröffentlichen. Keine automatische Massenumwandlung.
