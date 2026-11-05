@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: '22'
       - name: Install browser test dependency
-        run: npm install --no-save --ignore-scripts playwright@1.55.0
+        run: npm install --no-save --ignore-scripts playwright@latest
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Create and save Server in a real browser
         run: node tests/server-save-smoke.mjs
