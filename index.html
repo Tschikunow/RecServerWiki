@@ -559,6 +559,7 @@ async function saveExhibit(){
  }catch(error){
   state=before;
   if(button){button.disabled=false;button.textContent='✓ Speichern'}
+  const status=document.getElementById('draftStatus');if(status)status.textContent='● Fehler beim Speichern';
   console.error('Fehler beim lokalen Speichern',error);
   const reason=String(error?.message||error||'Unbekannter Speicherfehler').slice(0,120);
   toast('Speichern fehlgeschlagen: '+reason+'. Bitte JSON-Sicherung nutzen.');
@@ -663,7 +664,7 @@ const CLOUD_TABLE='recserverwiki_shared';
 const CLOUD_KEY='main';
 const cloud={config:null,session:null,role:'reader',revision:null,fileName:null,previousFileName:null,
  blocked:false,dirty:false,applying:false,busy:false,timer:null,pollTimer:null,
- lastMessage:'Öffentliches Wiki wird geladen …',status:'local',failure:false,initialized:false};
+ lastMessage:'Öffentliches Wiki wird geladen …',status:'local',failure:false,initialized:false,diagnostic:''};
 function cloudCanEdit(){return !!(cloud.config&&cloud.session&&['admin','editor'].includes(cloud.role))}
 function cloudGet(key){try{return JSON.parse(localStorage.getItem(key))}catch{return null}}
 function cloudPut(key,obj){try{if(obj===null)localStorage.removeItem(key);else localStorage.setItem(key,JSON.stringify(obj))}catch(e){console.warn('Cloud-Konfiguration konnte nicht gespeichert werden',e)}}
@@ -921,8 +922,9 @@ function cloudRenderModal(){
  <div class="cloud-pane"><div class="cloud-state"><span class="cloud-state-orb ${esc(cloud.status)}"></span><div><b id="cloudStatusText">${esc(cloud.lastMessage)}</b><small>${account?'Angemeldet: '+esc(account.user.email||'Konto')+' · Rolle: '+esc(cloud.role):'Gast · öffentliches Wiki nur lesen'}</small></div></div>
  ${!configured?`<div class="cloud-stage"><h3>Supabase mit dieser Website verbinden</h3><p>Projekt-URL und ÖFFENTLICHEN Publishable Key eintragen. Damit jeder Besucher das Wiki sofort sieht, einmalig dieselben Angaben in der GitHub-Datei <code>cloud-config.js</code> speichern.</p><label>Supabase-Projekt-URL<input id="cloudUrl" type="url" placeholder="https://projekt.supabase.co"></label><label>Öffentlicher Publishable/Anon Key<input id="cloudKey" type="text" placeholder="sb_publishable_..." spellcheck="false"></label><button type="button" class="cloud-primary" data-cloud-action="save-config">Projekt lokal verbinden</button><p class="cloud-hint">Nur Publishable/Anon! Niemals Secret oder Service-Role-Key.</p></div>`:''}
  ${configured?`<div class="cloud-stage"><h3>${editor?'Redaktion freigeschaltet':'Öffentliches Wiki'}</h3><p>${editor?'Du darfst Artikel veröffentlichen und bearbeiten. Änderungen erscheinen für alle Besucher.':account?'Dein Konto kann Artikel lesen. Der Betreiber muss es erst als Redakteur freischalten.':'Lesen geht ohne Konto. Für die Redaktion kannst du dich hier anmelden.'}</p><div class="cloud-stats"><span><small>Version</small><b>${cloud.revision??'—'}</b></span><span><small>Artikel</small><b>${state.exhibits.length}</b></span><span><small>Kategorien</small><b>${state.categories.length}</b></span></div>
+ ${cloud.diagnostic?`<pre class="cloud-diagnostic" role="status">${esc(cloud.diagnostic)}</pre>`:''}
  ${editor&&locked?`<p><strong>Versionskonflikt:</strong> Vor einer Entscheidung bitte eine JSON-Sicherung erstellen.</p><div class="cloud-actions cloud-conflict-actions"><button type="button" class="cloud-primary" data-cloud-action="choose-remote">Öffentliche Version übernehmen</button><button type="button" class="cloud-secondary" data-cloud-action="choose-local">Diese lokale Version veröffentlichen</button></div>`:''}
- <div class="cloud-actions"><button type="button" class="cloud-secondary" data-cloud-action="test-connection">Verbindung testen</button><button type="button" class="cloud-secondary" data-cloud-action="check-now">Öffentliches Archiv aktualisieren</button>${editor&&!locked?'<button type="button" class="cloud-primary" data-cloud-action="sync-now">Jetzt veröffentlichen</button>':''}${account&&!editor?'<button type="button" class="cloud-secondary" data-cloud-action="check-role">Redaktionsrechte erneut prüfen</button>':''}</div>
+ <div class="cloud-actions"><button type="button" class="cloud-secondary" data-cloud-action="test-connection">Verbindung testen</button><button type="button" class="cloud-secondary" data-cloud-action="check-now">Öffentliches Archiv aktualisieren</button><button type="button" class="cloud-secondary" data-cloud-action="diagnose">Speicherdiagnose</button>${editor&&!locked?'<button type="button" class="cloud-primary" data-cloud-action="sync-now">Jetzt veröffentlichen</button>':''}${account&&!editor?'<button type="button" class="cloud-secondary" data-cloud-action="check-role">Redaktionsrechte erneut prüfen</button>':''}</div>
  <div class="cloud-bottom-actions"><button type="button" class="cloud-text-btn" data-cloud-action="export">↓ JSON-Sicherung herunterladen</button>${editor?'<button type="button" class="cloud-text-btn" data-cloud-action="import-legacy">↥ Alte lokale Artikel übernehmen</button>':''}${account?'<button type="button" class="cloud-text-btn" data-cloud-action="logout">Abmelden</button>':''}</div></div>`:''}
  ${configured&&!account?`<div class="cloud-stage"><h3>Redaktionskonto</h3><p>Alle dürfen lesen. Nur zugelassene Konten dürfen schreiben.</p><label>E-Mail<input id="cloudEmail" type="email" autocomplete="username"></label><label>Passwort<input id="cloudPassword" type="password" minlength="6" autocomplete="current-password"></label><div class="cloud-actions"><button type="button" class="cloud-primary" data-cloud-action="login">Anmelden</button><button type="button" class="cloud-secondary" data-cloud-action="signup">Konto erstellen</button></div><button type="button" class="cloud-text-btn" data-cloud-action="resend-confirmation">Bestätigungsmail erneut anfordern</button><p class="cloud-hint">Bestätigungslinks sollen zu ${CLOUD_SITE_URL} führen. Falls sie auf localhost:3000 landen, unter Supabase → Authentication → URL Configuration die Site URL und erlaubten Redirect-URLs korrigieren. Nach bereits erfolgter Bestätigung kannst du dich direkt anmelden.</p></div>`:''}
  ${configured?`<details class="cloud-more"><summary>Supabase-Projekt wechseln</summary><div class="cloud-stage"><label>Projekt-URL<input id="cloudUrl" value="${esc(cloud.config.url)}"></label><label>Publishable Key<input id="cloudKey" value="${esc(cloud.config.key)}"></label><button class="cloud-secondary" data-cloud-action="save-config">Neue Verbindung speichern</button></div></details>`:''}
@@ -935,6 +937,50 @@ function cloudRenderModal(){
  const nextWindow=host.querySelector('.cloud-window');if(nextWindow)nextWindow.scrollTop=oldScroll;
  const nextFocus=activeId?host.querySelector('#'+activeId):null;
  if(nextFocus){nextFocus.focus({preventScroll:true});if(selection)try{nextFocus.setSelectionRange(selection[0],selection[1])}catch(e){}}
+}
+async function cloudDiagnoseSave(){
+ cloud.diagnostic='Prüfe Browser-Speicher, öffentlichen Artikelstand und Redaktionsrechte …';
+ cloudRenderModal();
+ try{
+  const lines=[];
+  const local=await readState();
+  const localEntries=Array.isArray(local?.exhibits)?local.exhibits:[];
+  const visible=Array.isArray(state.exhibits)?state.exhibits:[];
+  const typeCount=(entries,type)=>entries.filter(x=>x?.type===type).length;
+  lines.push('ZUGRIFF: '+(cloudCanEdit()?'Als Redakteur/Admin angemeldet':'Keine aktiven Redaktionsrechte'));
+  lines.push('BROWSER-SPEICHER: '+(memoryFallback?'Ersatzspeicher (localStorage)':'IndexedDB'));
+  lines.push('LOKAL GESPEICHERT: '+localEntries.length+' Artikel, davon '+typeCount(localEntries,'server')+' Server');
+  lines.push('AKTUELLE ANSICHT: '+visible.length+' Artikel, davon '+typeCount(visible,'server')+' Server');
+  if(app.editing)lines.push('EDITOR: Ein Eintrag ist noch offen und möglicherweise ungespeichert');
+  if(!cloud.config)lines.push('CLOUD: Keine gültige Supabase-Verbindung');
+  else{
+   const meta=await cloudGetMeta();
+   if(meta){
+    const remote=meta.file_name?await cloudDownloadFile(meta):{exhibits:[]};
+    const published=Array.isArray(remote?.exhibits)?remote.exhibits:[];
+    const publicIds=new Set(published.map(x=>x.id));
+    const localOnly=localEntries.filter(x=>!publicIds.has(x.id));
+    const publishedById=new Map(published.map(x=>[x.id,x]));
+    const changed=localEntries.filter(x=>{
+     const other=publishedById.get(x.id);
+     return other&&JSON.stringify(x)!==JSON.stringify(other);
+    });
+    lines.push('ÖFFENTLICH: Version '+Number(meta.revision||0)+', '+published.length+' Artikel, davon '+typeCount(published,'server')+' Server');
+    lines.push('NUR AUF DIESEM GERÄT: '+localOnly.length+' noch nicht veröffentlichte Artikel');
+    lines.push('ABWEICHENDE ARTIKEL: '+changed.length+' lokale Änderungen gegenüber dem öffentlichen Archiv');
+    if(localOnly.length)lines.push('BEISPIELE: '+localOnly.slice(0,3).map(x=>x.title||'Ohne Titel').join(', '));
+    if(!cloudCanEdit())lines.push('NÄCHSTER SCHRITT: Unter Cloud & Synchronisierung als Redakteur anmelden.');
+    else if(cloud.blocked)lines.push('URSACHE: VERSIONSKONFLIKT blockiert das Veröffentlichen. Zuerst JSON-Sicherung erstellen; anschließend über die Konflikt-Schaltflächen die richtige Version wählen.');
+    else if(localOnly.length||changed.length||cloud.dirty)lines.push('NÄCHSTER SCHRITT: Nach einer JSON-Sicherung auf „Jetzt veröffentlichen“ klicken und den Status prüfen.');
+    else lines.push('ERGEBNIS: Lokaler und öffentlicher Artikelbestand wirken synchron. Bei fehlenden Artikeln Filter und Browsercache prüfen.');
+   }else lines.push('CLOUD: Gemeinsamer Datenbankeintrag nicht erreichbar');
+  }
+  cloud.diagnostic=lines.join('\n');
+ }catch(error){
+  cloud.diagnostic='DIAGNOSE FEHLGESCHLAGEN: '+String(error?.message||error).slice(0,180)+'\nLokal speichern und öffentliche Cloud-Verbindung getrennt überprüfen.';
+  console.warn('RecServerWiki Speicherdiagnose',error);
+ }
+ cloudRenderModal();
 }
 function cloudOpen(){document.getElementById('cloudHost').innerHTML='<div class="cloud-overlay" id="cloudModal"></div>';cloudRenderModal()}
 function cloudClose(){document.getElementById('cloudHost').innerHTML=''}
@@ -968,7 +1014,7 @@ document.addEventListener('click',async e=>{
  const act=e.target.closest('[data-cloud-action]');if(!act)return;
  e.preventDefault();e.stopImmediatePropagation();const a=act.dataset.cloudAction;
  try{
-  if(a==='open')return cloudOpen();if(a==='close')return cloudClose();if(a==='save-config')return await cloudSaveConfig();if(a==='test-connection')return await cloudTestConnection();if(a==='resend-confirmation')return await cloudResendConfirmation();if(a==='login')return await cloudSignIn(false);if(a==='signup')return await cloudSignIn(true);if(a==='logout')return await cloudSignOut();if(a==='export')return downloadArchive();
+  if(a==='open')return cloudOpen();if(a==='close')return cloudClose();if(a==='save-config')return await cloudSaveConfig();if(a==='test-connection')return await cloudTestConnection();if(a==='diagnose')return await cloudDiagnoseSave();if(a==='resend-confirmation')return await cloudResendConfirmation();if(a==='login')return await cloudSignIn(false);if(a==='signup')return await cloudSignIn(true);if(a==='logout')return await cloudSignOut();if(a==='export')return downloadArchive();
   if(cloudSetBusyGuard())return;
   if(a==='check-role'){await cloudCheckRole();return cloudRenderModal()}if(a==='import-legacy')return await cloudImportLegacy()
   if(a==='choose-local')return await cloudChooseLocal();if(a==='choose-remote')return await cloudChooseRemote();
