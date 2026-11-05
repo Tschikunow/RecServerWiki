@@ -602,7 +602,11 @@ async function saveExhibit(){
  e.categories=(e.categories||[]).filter(key=>{const c=getCategory(key);return c&&categoryMatchesEntry(c,e.type)});
  e.updatedAt=new Date().toISOString();
  const before=JSON.parse(JSON.stringify(state));
- const record=JSON.parse(JSON.stringify(e));
+ let record=JSON.parse(JSON.stringify(e));
+ if(!app.isNew&&live.editBase&&live.editBase.id===record.id){
+  const latest=getEntry(record.id);
+  if(latest)record=livePatchValue(latest,live.editBase,record);
+ }
  if(app.isNew)state.exhibits.unshift(record);
  else{
   const index=state.exhibits.findIndex(x=>x.id===e.id);
@@ -983,15 +987,15 @@ function cloudRenderModal(){
  const active=document.activeElement,activeId=host.contains(active)?active?.id:null;
  const selection=(activeId&&typeof active?.selectionStart==='number')?[active.selectionStart,active.selectionEnd]:null;
  const oldFields=Object.fromEntries(['cloudEmail','cloudPassword','cloudUrl','cloudKey'].map(id=>[id,host.querySelector('#'+id)?.value??null]));
- const account=cloud.session,configured=!!cloud.config,editor=cloudCanEdit(),locked=cloud.blocked;
+ const account=cloud.session,configured=!!cloud.config,editor=cloudCanEdit();
  const content=`<div class="cloud-overlay" id="cloudModal"><div class="cloud-window" role="dialog" aria-modal="true" aria-label="Öffentliches Wiki und Redaktion"><div class="cloud-titlebar"><div><div class="cloud-eyebrow">RECSERVERWIKI / GEMEINSAMES ARCHIV</div><h2>Eine Wikipedia. Für alle.</h2><p>Alle Besucher sehen dieselben Artikel. Nur freigeschaltete Redakteure können Inhalte ändern.</p></div><button type="button" class="cloud-close" data-cloud-action="close" title="Schließen">×</button></div>
  <div class="cloud-pane"><div class="cloud-state"><span class="cloud-state-orb ${esc(cloud.status)}"></span><div><b id="cloudStatusText">${esc(cloud.lastMessage)}</b><small>${account?'Angemeldet: '+esc(account.user.email||'Konto')+' · Rolle: '+esc(cloud.role):'Gast · öffentliches Wiki nur lesen'}</small></div></div>
  ${!configured?`<div class="cloud-stage"><h3>Supabase mit dieser Website verbinden</h3><p>Projekt-URL und ÖFFENTLICHEN Publishable Key eintragen. Damit jeder Besucher das Wiki sofort sieht, einmalig dieselben Angaben in der GitHub-Datei <code>cloud-config.js</code> speichern.</p><label>Supabase-Projekt-URL<input id="cloudUrl" type="url" placeholder="https://projekt.supabase.co"></label><label>Öffentlicher Publishable/Anon Key<input id="cloudKey" type="text" placeholder="sb_publishable_..." spellcheck="false"></label><button type="button" class="cloud-primary" data-cloud-action="save-config">Projekt lokal verbinden</button><p class="cloud-hint">Nur Publishable/Anon! Niemals Secret oder Service-Role-Key.</p></div>`:''}
- ${configured?`<div class="cloud-stage"><h3>${editor?'Redaktion freigeschaltet':'Öffentliches Wiki'}</h3><p>${editor?'Du darfst Artikel veröffentlichen und bearbeiten. Änderungen erscheinen für alle Besucher.':account?'Dein Konto kann Artikel lesen. Der Betreiber muss es erst als Redakteur freischalten.':'Lesen geht ohne Konto. Für die Redaktion kannst du dich hier anmelden.'}</p><div class="cloud-stats"><span><small>Version</small><b>${cloud.revision??'—'}</b></span><span><small>Artikel</small><b>${state.exhibits.length}</b></span><span><small>Kategorien</small><b>${state.categories.length}</b></span></div>
+ ${configured?`<div class="cloud-stage"><h3>${editor?'Live-Redaktion aktiv':'Öffentliches Live-Wiki'}</h3><p>${editor?'Du bearbeitest dieselbe öffentliche Sammlung wie alle Besucher. Änderungen werden automatisch zusammengeführt und direkt veröffentlicht.':'Alle sehen den gemeinsamen Live-Stand. Nur freigeschaltete Admins und Redakteure können ihn verändern.'}</p><div class="cloud-stats"><span><small>Live-Stand</small><b>${cloud.revision??'—'}</b></span><span><small>Artikel</small><b>${state.exhibits.length}</b></span><span><small>Kategorien</small><b>${state.categories.length}</b></span></div>
  ${cloud.diagnostic?`<pre class="cloud-diagnostic" role="status">${esc(cloud.diagnostic)}</pre>`:''}
- ${editor&&locked?`<p><strong>Versionskonflikt:</strong> Vor einer Entscheidung bitte eine JSON-Sicherung erstellen.</p><div class="cloud-actions cloud-conflict-actions"><button type="button" class="cloud-primary" data-cloud-action="choose-remote">Öffentliche Version übernehmen</button><button type="button" class="cloud-secondary" data-cloud-action="choose-local">Diese lokale Version veröffentlichen</button></div>`:''}
- <div class="cloud-actions"><button type="button" class="cloud-secondary" data-cloud-action="test-connection">Verbindung testen</button><button type="button" class="cloud-secondary" data-cloud-action="check-now">Öffentliches Archiv aktualisieren</button><button type="button" class="cloud-secondary" data-cloud-action="diagnose">Speicherdiagnose</button>${editor&&!locked?'<button type="button" class="cloud-primary" data-cloud-action="sync-now">Jetzt veröffentlichen</button>':''}${account&&!editor?'<button type="button" class="cloud-secondary" data-cloud-action="check-role">Redaktionsrechte erneut prüfen</button>':''}</div>
- <div class="cloud-bottom-actions"><button type="button" class="cloud-text-btn" data-cloud-action="export">↓ JSON-Sicherung herunterladen</button>${editor?'<button type="button" class="cloud-text-btn" data-cloud-action="import-legacy">↥ Alte lokale Artikel übernehmen</button>':''}${account?'<button type="button" class="cloud-text-btn" data-cloud-action="logout">Abmelden</button>':''}</div></div>`:''}
+
+ <div class="cloud-actions"><button type="button" class="cloud-secondary" data-cloud-action="test-connection">Verbindung testen</button><button type="button" class="cloud-secondary" data-cloud-action="check-now">Öffentliches Archiv aktualisieren</button><button type="button" class="cloud-secondary" data-cloud-action="diagnose">Speicherdiagnose</button>${editor?'<button type="button" class="cloud-primary" data-cloud-action="sync-now">Live-Stand prüfen</button>':''}${account&&!editor?'<button type="button" class="cloud-secondary" data-cloud-action="check-role">Redaktionsrechte erneut prüfen</button>':''}</div>
+ <div class="cloud-bottom-actions"><button type="button" class="cloud-text-btn" data-cloud-action="export">↓ JSON-Sicherung herunterladen</button>${editor&&live.oldLocal&&!liveSame(live.oldLocal,live.shadow)?'<button type="button" class="cloud-text-btn" data-cloud-action="export-old-local">↓ Altes lokales Archiv sichern</button>':''}${account?'<button type="button" class="cloud-text-btn" data-cloud-action="logout">Abmelden</button>':''}</div></div>`:''}
  ${configured&&!account?`<div class="cloud-stage"><h3>Redaktionskonto</h3><p>Alle dürfen lesen. Nur zugelassene Konten dürfen schreiben.</p><label>E-Mail<input id="cloudEmail" type="email" autocomplete="username"></label><label>Passwort<input id="cloudPassword" type="password" minlength="6" autocomplete="current-password"></label><div class="cloud-actions"><button type="button" class="cloud-primary" data-cloud-action="login">Anmelden</button><button type="button" class="cloud-secondary" data-cloud-action="signup">Konto erstellen</button></div><button type="button" class="cloud-text-btn" data-cloud-action="resend-confirmation">Bestätigungsmail erneut anfordern</button><p class="cloud-hint">Bestätigungslinks sollen zu ${CLOUD_SITE_URL} führen. Falls sie auf localhost:3000 landen, unter Supabase → Authentication → URL Configuration die Site URL und erlaubten Redirect-URLs korrigieren. Nach bereits erfolgter Bestätigung kannst du dich direkt anmelden.</p></div>`:''}
  ${configured?`<details class="cloud-more"><summary>Supabase-Projekt wechseln</summary><div class="cloud-stage"><label>Projekt-URL<input id="cloudUrl" value="${esc(cloud.config.url)}"></label><label>Publishable Key<input id="cloudKey" value="${esc(cloud.config.key)}"></label><button class="cloud-secondary" data-cloud-action="save-config">Neue Verbindung speichern</button></div></details>`:''}
  <div class="cloud-instructions"><b>Öffentliches Wiki:</b><ol><li>Jeder Besucher sieht dieselben Artikel auch ohne Anmeldung.</li><li>Artikel ändern können nur per SQL freigeschaltete Redakteure.</li><li>Wenn noch kein öffentlicher Artikel existiert, kann ein Redakteur seine JSON-Sicherung importieren und veröffentlichen.</li></ol><small>Die öffentliche Sammlung ist für alle Internetnutzer sichtbar. Private lokale Altbestände werden nicht automatisch veröffentlicht.</small></div></div></div></div>`;
@@ -1080,18 +1084,18 @@ document.addEventListener('click',async e=>{
  const act=e.target.closest('[data-cloud-action]');if(!act)return;
  e.preventDefault();e.stopImmediatePropagation();const a=act.dataset.cloudAction;
  try{
-  if(a==='open')return cloudOpen();if(a==='close')return cloudClose();if(a==='save-config')return await cloudSaveConfig();if(a==='test-connection')return await cloudTestConnection();if(a==='diagnose')return await cloudDiagnoseSave();if(a==='resend-confirmation')return await cloudResendConfirmation();if(a==='login')return await cloudSignIn(false);if(a==='signup')return await cloudSignIn(true);if(a==='logout')return await cloudSignOut();if(a==='export')return downloadArchive();
+  if(a==='open')return cloudOpen();if(a==='close')return cloudClose();if(a==='save-config')return await cloudSaveConfig();if(a==='test-connection')return await cloudTestConnection();if(a==='diagnose')return await cloudDiagnoseSave();if(a==='resend-confirmation')return await cloudResendConfirmation();if(a==='login')return await cloudSignIn(false);if(a==='signup')return await cloudSignIn(true);if(a==='logout')return await cloudSignOut();if(a==='export')return downloadArchive();if(a==='export-old-local')return liveDownloadOldLocal();
   if(cloudSetBusyGuard())return;
   if(a==='check-role'){await cloudCheckRole();return cloudRenderModal()}if(a==='import-legacy')return await cloudImportLegacy()
   if(a==='choose-local')return await cloudChooseLocal();if(a==='choose-remote')return await cloudChooseRemote();
-  if(a==='sync-now'&&cloudCanEdit()){cloud.dirty=true;return await cloudUpload('manual')}
+  if(a==='sync-now'&&cloudCanEdit())return await cloudUpload('manual')
   if(a==='check-now'){if(cloud.revision===null)return await cloudReconcile();await cloudCheck();cloudRenderModal()}
  }catch(e){cloudOnError(e)}
 },true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('cloudModal')){e.stopImmediatePropagation();cloudClose()}},true);
-window.addEventListener('online',()=>{if(cloud.config&&!cloud.blocked){cloudCheck();if(cloud.dirty)cloudSchedule()}});
+window.addEventListener('online',()=>{if(cloud.config){liveDisconnect();cloudCheck()}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cloud.config)cloudCheck()});
-cloud.pollTimer=setInterval(()=>{if(cloud.config&&!document.hidden)cloudCheck()},20000);
+cloud.pollTimer=setInterval(()=>{if(cloud.config&&!document.hidden)cloudCheck()},3000);
 const live={shadow:null,oldLocal:null,pending:0,queue:Promise.resolve(),refreshing:null,socket:null,heartbeat:null,lastSocketTry:0};
 function liveClone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x))}
 function liveSame(a,b){return JSON.stringify(a)===JSON.stringify(b)}
