@@ -92,10 +92,12 @@ try {
   const recovery=await page.evaluate(async()=>{
     dbPromise=Promise.reject(new Error('Injected IndexedDB write failure'));
     await saveState();
+    const markerBefore=localStorage.getItem('recserverwiki_shared_v1_fallback');
     const saved=await readState();
-    return {marker:localStorage.getItem('recserverwiki_shared_v1_fallback'),hasServer:saved.exhibits.some(x=>x.type==='server'&&x.title==='Neusenat')};
+    return {markerBefore,markerAfter:localStorage.getItem('recserverwiki_shared_v1_fallback'),hasServer:saved.exhibits.some(x=>x.type==='server'&&x.title==='Neusenat')};
   });
-  assert.equal(recovery.marker,'1','Fallback marker missing');
+  assert.equal(recovery.markerBefore,'1','Fallback was not written after IndexedDB failure');
+  assert.equal(recovery.markerAfter,null,'Recovered fallback was not migrated back to IndexedDB');
   assert.ok(recovery.hasServer,'Server missing from fallback storage');
 
   // A legacy localStorage fallback must migrate into IndexedDB and stop enforcing 5-MB limits.
