@@ -42,7 +42,7 @@ try {
 
   // Real clicks, real inputs, real IndexedDB storage. No production API calls.
   await page.locator('[data-act="new"]').first().click();
-  await page.locator('[data-new-type="person"]').click();
+  await page.locator('#chooserOverlay [data-new-type="person"]').click();
   await page.locator('.drawer [data-field="title"]').fill('McDuckyman');
   await page.locator('.drawer [data-act="save-exhibit"]').click();
   await page.waitForFunction(()=>!document.querySelector('.drawer'));
@@ -51,7 +51,7 @@ try {
   assert.equal(persisted.exhibits[0].title,'McDuckyman');
 
   await page.locator('[data-act="new"]').first().click();
-  await page.locator('[data-new-type="server"]').click();
+  await page.locator('#chooserOverlay [data-new-type="server"]').click();
   await page.locator('.drawer [data-field="title"]').fill('Neusenat');
   await page.locator('.drawer [data-detail-field="serverVisits"]').fill('1500');
   await page.locator('.drawer [data-detail-field="serverClubMembers"]').fill('50');
