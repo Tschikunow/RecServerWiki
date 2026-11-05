@@ -183,8 +183,68 @@ const makeBlock=type=>{
 };
 const dbName='recserverwiki_shared_v1';let memoryFallback=false,dbPromise;
 function openDb(){if(dbPromise)return dbPromise;dbPromise=new Promise((res,rej)=>{if(!window.indexedDB){rej(Error('IndexedDB nicht verfügbar'));return}const req=indexedDB.open(dbName,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('storage'))req.result.createObjectStore('storage')};req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error)});return dbPromise}
-async function readState(){try{let db=await openDb();return await new Promise((res,rej)=>{let tx=db.transaction('storage','readonly'),r=tx.objectStore('storage').get('collection');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){memoryFallback=true;try{return JSON.parse(localStorage.getItem(dbName))}catch{return null}}}
-async function saveState(){try{if(memoryFallback){localStorage.setItem(dbName,JSON.stringify(state));return}const db=await openDb();await new Promise((res,rej)=>{const tx=db.transaction('storage','readwrite');tx.objectStore('storage').put(state,'collection');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}catch(e){console.warn('storage',e);toast('Speichern fehlgeschlagen. Exportiere zur Sicherheit dein Archiv.');throw e}}
+async function readState(){
+ // A previously activated fallback must take priority over stale IndexedDB data.
+ try{
+  if(localStorage.getItem(dbName+'_fallback')==='1'){
+   memoryFallback=true;
+   const raw=localStorage.getItem(dbName);
+   return raw?JSON.parse(raw):null;
+  }
+ }catch(error){console.warn('Fallback-Markierung konnte nicht gelesen werden',error)}
+ try{
+  const db=await openDb();
+  return await new Promise((resolve,reject)=>{
+   const tx=db.transaction('storage','readonly'),req=tx.objectStore('storage').get('collection');
+   req.onsuccess=()=>resolve(req.result);
+   req.onerror=()=>reject(req.error);
+   tx.onerror=()=>reject(tx.error);
+  });
+ }catch(error){
+  memoryFallback=true;
+  console.warn('IndexedDB nicht lesbar, verwende Browser-Ersatzspeicher',error);
+  try{
+   const raw=localStorage.getItem(dbName);
+   return raw?JSON.parse(raw):null;
+  }catch{return null}
+ }
+}
+async function saveState(){
+ let raw;
+ try{raw=JSON.stringify(state)}catch(error){
+  toast('Speichern fehlgeschlagen: Ungültige Artikeldaten. Bitte JSON-Sicherung erstellen.');
+  throw error;
+ }
+ const fallbackSave=()=>{
+  localStorage.setItem(dbName,raw);
+  localStorage.setItem(dbName+'_fallback','1');
+  memoryFallback=true;
+ };
+ try{
+  if(memoryFallback){fallbackSave();return}
+  const db=await openDb();
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction('storage','readwrite');
+   tx.objectStore('storage').put(state,'collection');
+   tx.oncomplete=()=>resolve();
+   tx.onabort=()=>reject(tx.error||Error('IndexedDB-Transaktion abgebrochen'));
+   tx.onerror=()=>reject(tx.error||Error('IndexedDB-Schreibfehler'));
+  });
+ }catch(error){
+  console.warn('IndexedDB-Schreiben fehlgeschlagen',error);
+  if(!memoryFallback){
+   try{
+    fallbackSave();
+    toast('Browser-Datenbank nicht verfügbar. Artikel ersatzweise lokal gesichert; bitte JSON-Sicherung herunterladen.');
+    return;
+   }catch(fallbackError){
+    console.warn('Auch der Ersatzspeicher ist nicht verfügbar',fallbackError);
+   }
+  }
+  toast('Speichern fehlgeschlagen: Browser-Speicher voll oder blockiert. Bitte Bilder reduzieren oder JSON-Sicherung erstellen.');
+  throw error;
+ }
+}
 let state={exhibits:[],categories:[],biographyPresets:emptyBiographyPresets()};
 let app={view:'home',detailId:null,articleTrail:[],filter:'Alle',typeFilter:'all',categoryScope:'all',query:'',sort:'newest',layout:'grid',editing:null,isNew:false,dirty:false,linkTarget:null};
 const sortNewest=arr=>arr.slice().sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0));
