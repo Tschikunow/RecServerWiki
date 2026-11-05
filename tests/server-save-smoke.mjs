@@ -75,6 +75,28 @@ try {
   persisted=await page.evaluate(async()=>await readState());
   assert.equal(persisted.exhibits.find(e=>e.id===server.id).details.serverRegularVisitors,'85');
   assert.ok((await page.locator('.server-person-link').count())>0,'Owner link missing');
+
+  // Confirm why a saved local Server is invisible on another device.
+  await page.evaluate(()=>{
+    cloudGetMeta=async()=>({revision:99,file_name:'fake-public.json'});
+    cloudDownloadFile=async()=>({exhibits:state.exhibits.filter(x=>x.type==='person'),categories:[]});
+  });
+  await page.locator('#cloudIndicator').click();
+  await page.locator('[data-cloud-action="diagnose"]').click();
+  await page.waitForFunction(()=>document.querySelector('.cloud-diagnostic')?.textContent.includes('ÖFFENTLICH:'));
+  const report=await page.locator('.cloud-diagnostic').textContent();
+  assert.ok(report.includes('NUR AUF DIESEM GERÄT: 1'),'Missing unpublished-server warning');
+  assert.ok(report.includes('VERSIONSKONFLIKT'),'Blocked sync warning missing');
+
+  // An IndexedDB write outage must preserve the Server via persistent fallback.
+  const recovery=await page.evaluate(async()=>{
+    dbPromise=Promise.reject(new Error('Injected IndexedDB write failure'));
+    await saveState();
+    const saved=await readState();
+    return {marker:localStorage.getItem('recserverwiki_shared_v1_fallback'),hasServer:saved.exhibits.some(x=>x.type==='server'&&x.title==='Neusenat')};
+  });
+  assert.equal(recovery.marker,'1','Fallback marker missing');
+  assert.ok(recovery.hasServer,'Server missing from fallback storage');
   assert.deepEqual(errors,[],'Browser JavaScript errors: '+errors.join('\n'));
   console.log('SUCCESS: Biography + new Server + owner/moderator links + re-edit + IndexedDB save');
 } finally {
