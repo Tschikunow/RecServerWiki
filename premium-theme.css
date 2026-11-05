@@ -265,3 +265,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .server-moderator-choice span{min-width:0;overflow-wrap:anywhere}
 @media(max-width:900px){.server-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.server-stats-grid{gap:7px}.server-stat{padding:12px 10px}.server-team-grid,.server-moderator-list{grid-template-columns:1fr}}
+
+/* Browser/Cloud troubleshooting: results remain visible until the next diagnosis */
+.cloud-diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font:500 11px/1.7 "Segoe UI",system-ui,sans-serif;background:var(--rsw-soft);color:var(--rsw-ink);border:1px solid var(--rsw-border);padding:15px 17px;border-radius:12px;margin:13px 0 16px;max-height:320px;overflow:auto}
+.cloud-diagnostic::selection{background:var(--rsw-ring)}
+#draftStatus{max-width:65%;overflow-wrap:anywhere}
