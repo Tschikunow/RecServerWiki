@@ -615,24 +615,15 @@ async function saveExhibit(){
  }
  const button=document.querySelector('.drawer [data-act="save-exhibit"]');
  if(button){button.disabled=true;button.textContent='Speichert …'}
- let publishedWithoutLocalCopy=false;
  try{
   await saveState();
  }catch(error){
-  console.warn('Lokaler Speicher nicht verfügbar, sichere Eintrag nur bei sicherem Cloud-Abgleich',error);
-  // If the user's storage is full, the authenticated editor may still publish
-  // the full snapshot safely using the optimistic revision check. Never force a conflict.
-  if(cloudCanEdit()&&!cloud.blocked&&!cloud.busy&&cloud.revision!==null){
-   try{publishedWithoutLocalCopy=await cloudUpload('save-recovery')}catch(publishError){console.warn('Cloud-Speicherung nicht möglich',publishError)}
-  }
-  if(!publishedWithoutLocalCopy){
-   state=before;
-   if(button){button.disabled=false;button.textContent='✓ Speichern'}
-   const status=document.getElementById('draftStatus');if(status)status.textContent='● Fehler beim Speichern';
-   console.error('Fehler beim lokalen Speichern',error);
-   toast('Browser-Speicher voll. Entwurf bleibt offen! Mit „Entwurf als JSON sichern“ jetzt eine Datei herunterladen. Keine Browserdaten löschen.');
-   return;
-  }
+  state=before;
+  if(button){button.disabled=false;button.textContent='✓ Speichern'}
+  const status=document.getElementById('draftStatus');if(status)status.textContent='● Noch nicht gespeichert';
+  console.error('Live-Speichern fehlgeschlagen',error);
+  toast('Live-Speichern fehlgeschlagen: '+String(error?.message||error).slice(0,125)+'. Dein Entwurf bleibt offen. Bei Bedarf „Entwurf als JSON sichern“ verwenden.');
+  return;
  }
  // The record is already persisted. A preview/render error must not undo it.
  app.editing=null;app.dirty=false;app.isNew=false;
@@ -647,7 +638,7 @@ async function saveExhibit(){
   toast('Eintrag gespeichert. Anzeigeproblem: bitte neu laden.');
   return;
  }
- toast(publishedWithoutLocalCopy?'Eintrag öffentlich gespeichert. Lokaler Browser-Speicher ist voll: bitte JSON-Sicherung herunterladen.':cloud.blocked?'Lokal gespeichert. Versionskonflikt: unter Cloud & Synchronisierung veröffentlichen.':'Eintrag gespeichert.');
+ toast('Live gespeichert. Alle Besucher und Admins sehen die aktuelle Version.');
 }
 async function deleteExhibit(){const e=app.editing;if(!e)return;if(!confirm('„'+e.title+'“ wirklich löschen?'))return;const old=JSON.parse(JSON.stringify(state));state.exhibits=state.exhibits.filter(x=>x.id!==e.id);state.exhibits.forEach(x=>x.related=(x.related||[]).filter(k=>k!==e.id));try{await saveState();app.editing=null;app.dirty=false;$('#drawerHost').innerHTML='';document.body.style.overflow='';navigate('library');toast('Eintrag gelöscht.')}catch{state=old}}
 async function toggleFavorite(key){const e=getEntry(key);if(!e)return;const old=e.starred;e.starred=!old;try{await saveState();render()}catch{e.starred=old}}
