@@ -97,6 +97,71 @@ try {
   });
   assert.equal(recovery.marker,'1','Fallback marker missing');
   assert.ok(recovery.hasServer,'Server missing from fallback storage');
+
+  // A legacy localStorage fallback must migrate into IndexedDB and stop enforcing 5-MB limits.
+  const migrated=await page.evaluate(async()=>{
+    dbPromise=null;
+    const saved=await readState();
+    return {marker:localStorage.getItem('recserverwiki_shared_v1_fallback'),hasServer:saved.exhibits.some(x=>x.id===app.detailId),fallback:memoryFallback};
+  });
+  assert.equal(migrated.marker,null,'Old localStorage fallback marker was not cleared');
+  assert.equal(migrated.fallback,false,'Successful IndexedDB migration still forces fallback');
+  assert.ok(migrated.hasServer,'Migration lost server data');
+
+  // Simulate both storage systems full. A conflict-free cloud upload can still save safely.
+  await page.locator('[data-cloud-action="close"]').click();
+  await page.evaluate(()=>{
+    cloud.blocked=false;
+    cloud.busy=false;
+    cloud.revision=99;
+    cloud.dirty=false;
+    window.__postedArchives=[];
+    cloudGetMeta=async()=>({revision:99,file_name:'fake-public.json',previous_file_name:null,checksum:'old'});
+    cloudFetch=async(path,options)=>{
+      if(path.startsWith('/storage/v1/object/')){window.__postedArchives.push(JSON.parse(options.body));return {};}
+      if(path.startsWith('/rest/v1/'))return [{revision:100,file_name:'smoke-public.json',previous_file_name:'fake-public.json',checksum:'mock'}];
+      throw Error('Unexpected network request in smoke test');
+    };
+    storeInIndexedDb=async()=>{throw Error('Injected IndexedDB write failure')};
+    window.__originalSetItem=Storage.prototype.setItem;
+    Storage.prototype.setItem=function(key,value){
+      if(key==='recserverwiki_shared_v1')throw new DOMException('Stored value exceeds the quota','QuotaExceededError');
+      return window.__originalSetItem.call(this,key,value);
+    };
+  });
+  await page.locator('[data-act="new"]').first().click();
+  await page.locator('#chooserOverlay [data-new-type="server"]').click();
+  await page.locator('.drawer [data-field="title"]').fill('Neuer Server trotz Speicherlimit');
+  await page.locator('.drawer [data-detail-field="serverVisits"]').fill('980');
+  await page.locator('.drawer [data-act="save-exhibit"]').click();
+  await page.waitForFunction(()=>!document.querySelector('.drawer'));
+  const cloudRecovery=await page.evaluate(()=>({
+    archives:window.__postedArchives.length,
+    saved:window.__postedArchives.at(-1)?.exhibits.some(x=>x.title==='Neuer Server trotz Speicherlimit'&&x.details.serverVisits==='980'),
+    revision:cloud.revision
+  }));
+  assert.equal(cloudRecovery.archives,1,'Expected a single safe cloud upload');
+  assert.ok(cloudRecovery.saved,'Cloud recovery lost the new server');
+  assert.equal(cloudRecovery.revision,100,'Public revision did not advance');
+
+  // With a version conflict, never overwrite the cloud: preserve the open draft and offer JSON.
+  await page.evaluate(()=>{cloud.blocked=true;});
+  await page.locator('[data-act="new"]').first().click();
+  await page.locator('#chooserOverlay [data-new-type="server"]').click();
+  await page.locator('.drawer [data-field="title"]').fill('Noch unveröffentlichter Testserver');
+  await page.locator('.drawer [data-act="save-exhibit"]').click();
+  await page.waitForFunction(()=>document.getElementById('draftStatus')?.textContent.includes('Fehler'));
+  assert.equal(await page.locator('.drawer [data-field="title"]').inputValue(),'Noch unveröffentlichter Testserver');
+  assert.equal(await page.locator('[data-act="download-draft"]').count(),1,'Emergency backup missing');
+  const [backup]=await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('[data-act="download-draft"]').click()
+  ]);
+  assert.ok(backup.suggestedFilename().startsWith('RecServerWiki_Entwurf_'),'Draft backup filename wrong');
+  const noOverwrite=await page.evaluate(()=>window.__postedArchives.length);
+  assert.equal(noOverwrite,1,'Conflict must not publish a second archive');
+  await page.evaluate(()=>{Storage.prototype.setItem=window.__originalSetItem;});
+
   assert.deepEqual(errors,[],'Browser JavaScript errors: '+errors.join('\n'));
   console.log('SUCCESS: Biography + new Server + owner/moderator links + re-edit + IndexedDB save');
 } finally {
